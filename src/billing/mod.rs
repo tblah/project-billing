@@ -1,6 +1,101 @@
 //! # Contains the billing protocols I have implemented.
 //!
 //! Stuff common to all of the protocols is included in this file
+//!
+//! # Example
+//! ```
+//! extern crate proj_billing;
+//! extern crate proj_net;
+//! extern crate proj_crypto;
+//! extern crate sodiumoxide;
+//!
+//! use proj_net::server::Server;
+//! use proj_net::server;
+//! use proj_net::client::Client;
+//! use proj_net::client;
+//! use proj_crypto::asymmetric::key_exchange;
+//! use proj_crypto::asymmetric::sign;
+//! use proj_billing::billing;
+//! use proj_billing::billing::sign_on_meter::SignOnMeter;
+//! use proj_billing::billing::BillingProtocol;
+//! use std::thread;
+//! use std::time::Duration;
+//! 
+//! 
+//! fn server_thread(sign_keys: billing::Keys, exchange_keys: key_exchange::LongTermKeys,
+//!                  prices: <SignOnMeter<Server> as BillingProtocol<Server>>::Prices, socket: &str) -> f64 {
+//!     let mut stream = server::start(socket, exchange_keys).unwrap();
+//!
+//!     let mut server = SignOnMeter::new_server(stream, sign_keys);
+//!     
+//!     server.change_prices(&prices);
+//!
+//!     server.pay_bill()
+//! }
+//!
+//! fn meter_thread(keys: billing::Keys, exchange_keys: key_exchange::LongTermKeys,
+//!                 cons: <SignOnMeter<Client> as BillingProtocol<Client>>::Consumption, socket: &str) {
+//!     thread::sleep(Duration::from_millis(2)); // wait for the server to start
+//!
+//!     let mut stream = client::start(socket, exchange_keys).unwrap();
+//!     stream.blocking_off(5);
+//!
+//!     let ref prices = &<SignOnMeter<Client> as BillingProtocol<Client>>::null_prices();
+//!
+//!     let mut meter = SignOnMeter::new_meter(stream, prices, keys);
+//!
+//!     thread::sleep(Duration::from_millis(2)); // give the server chance to send us it's new prices
+//!
+//!     meter.consume(&cons);
+//!
+//!     meter.send_billing_information();
+//! }
+//!
+//! fn main() {
+//!     sodiumoxide::init();
+//!     let socket_path = "127.0.0.1:1024";
+//!     let (m_pk_s, m_sk_s) = sign::gen_keypair();
+//!     let (s_pk_s, s_sk_s) = sign::gen_keypair();
+//!     
+//!     let m_keys_s = billing::Keys {
+//!         my_sk: m_sk_s,
+//!         their_pk: s_pk_s,
+//!     };
+//!
+//!     let s_keys_s = billing::Keys {
+//!         my_sk: s_sk_s,
+//!         their_pk: m_pk_s,
+//!     };
+//!
+//!     let (m_pk_e, m_sk_e) = key_exchange::gen_keypair();
+//!     let (s_pk_e, s_sk_e) = key_exchange::gen_keypair();
+//!
+//!     let m_keys_e = key_exchange::LongTermKeys {
+//!         my_public_key: m_pk_e.clone(),
+//!         my_secret_key: m_sk_e,
+//!         their_public_key: s_pk_e.clone(),
+//!     };
+//!
+//!     let s_keys_e = key_exchange::LongTermKeys {
+//!         my_public_key: s_pk_e,
+//!         my_secret_key: s_sk_e,
+//!         their_public_key: m_pk_e,
+//!     };
+//!
+//!     let consumption = <SignOnMeter<Client> as BillingProtocol<Client>>::Consumption::new(0, 1.0);
+//!
+//!     let prices = [1.0; 24*7];
+//!
+//!     let socket_path_clone = socket_path.clone();
+//!     let socket_path_clone2 = socket_path.clone();
+//!     let server_thread = thread::spawn(move || -> f64 {server_thread(s_keys_s, s_keys_e, prices, socket_path_clone)});  
+//!     let _ = thread::spawn(move || {meter_thread(m_keys_s, m_keys_e, consumption, socket_path_clone2);}); 
+//!
+//!     let ret = server_thread.join().unwrap();
+//!
+//!     assert_eq!(ret, 1.0);
+//! }
+//! ```
 
 /*  This file is part of project-billing.
     project-billing is free software: you can redistribute it and/or modify
@@ -19,15 +114,17 @@ use proj_crypto::asymmetric::sign;
 
 /// Cryptographic Keys
 pub struct Keys {
-    my_sk: sign::SecretKey,
-    their_pk: sign::PublicKey,
+    /// Secret key and public key
+    pub my_sk: sign::SecretKey,
+    /// Public Key
+    pub their_pk: sign::PublicKey,
 }
 
 /// Functionality which all billing protocols must provide.
 ///
 /// The first type argument it the channel over which communication occurs. This should probably be a proj_net::{Server, Client}.
 /// The second type argument is the return value of the constructors (i.e the structure implementing this trait)
-pub trait BillingProtocol<T: Read + Write/*, U: BillingProtocol<T, U>*/> {
+pub trait BillingProtocol<T: Read + Write> {
     /// Consumption information for billing e.g. the time of consumption and the units consumed
     type Consumption;
 
@@ -62,7 +159,7 @@ pub mod sign_on_meter;
 
 #[cfg(test)]
 mod tests {
-    use super::sign_on_meter;
+    use super::sign_on_meter::SignOnMeter;
     use super::BillingProtocol;
     use sodiumoxide;
     use sodiumoxide::randombytes;
@@ -123,9 +220,7 @@ mod tests {
         where T: BillingProtocol<UnixStream> + Send, <T as BillingProtocol<UnixStream>>::Prices: Sync,
         <T as BillingProtocol<UnixStream>>::Consumption: Sync, <T as BillingProtocol<UnixStream>>::Consumption: Send,
         <T as BillingProtocol<UnixStream>>::Prices: Send, P: AsRef<Path> + Send + Clone + Sync
-    {
-        let (m_pk, m_sk) = sign::gen_keypair();
-        let (s_pk, s_sk) = sign::gen_keypair();
+    {let (m_pk, m_sk) = sign::gen_keypair(); let (s_pk, s_sk) = sign::gen_keypair();
         
         let m_keys = super::Keys {
             my_sk: m_sk,
@@ -196,10 +291,7 @@ mod tests {
             let units = random_positive_f32();
             let hour = random_hour_of_week();
 
-            let cons = sign_on_meter::Consumption{
-                hour_of_week: hour,
-                units_consumed: units,
-            };
+            let cons = <SignOnMeter<UnixStream> as BillingProtocol<UnixStream>>::Consumption::new(hour, units);
             consumption.push_back(cons);
 
             expected_bill += prices[hour as usize] as f64 * units as f64;
@@ -207,10 +299,9 @@ mod tests {
 
         let socket_path = "./sign_on_meter_test_socket".to_string();
         
-        let res = test_billing_protocol::<sign_on_meter::SignOnMeter<UnixStream>, String>(prices, consumption, socket_path);
+        let res = test_billing_protocol::<SignOnMeter<UnixStream>, String>(prices, consumption, socket_path);
 
         assert_eq!(res, expected_bill);
     }
-
 }
 

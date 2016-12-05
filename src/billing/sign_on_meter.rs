@@ -68,6 +68,18 @@ impl Consumption {
 
         true
     }
+
+    /// Instance new consumption
+    pub fn new(hour_of_week: u8, units_consumed: f32) -> Consumption {
+        let ret = Consumption {
+            hour_of_week: hour_of_week,
+            units_consumed: units_consumed,
+        };
+
+        assert!(ret.is_valid());
+
+        ret
+    }
 }
 
 impl<T: Read + Write> BillingProtocol<T> for SignOnMeter<T> {
