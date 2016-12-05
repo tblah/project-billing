@@ -20,6 +20,8 @@ use std::io::{Read, Write, ErrorKind};
 use proj_crypto::asymmetric::sign;
 use std::mem::transmute;
 use std::mem::drop;
+use std::thread;
+use std::time::Duration;
 
 #[derive(PartialEq)]
 enum Role {
@@ -29,12 +31,6 @@ enum Role {
 
 /// Co-efficient for the number of consumption units for each hour of each day of the week
 pub type Prices = [f32; 24*7];
-
-/// Cryptographic Keys
-pub struct Keys {
-    my_sk: sign::SecretKey,
-    their_pk: sign::PublicKey,
-}
 
 /// State of the billing protocol
 pub struct SignOnMeter<T: Read + Write> {
@@ -47,45 +43,22 @@ pub struct SignOnMeter<T: Read + Write> {
     /// The prices currently used to calculate the bill
     prices: Prices,
     /// Cryptographic keys for signing responses
-    keys: Keys,
+    keys: super::Keys,
 }
 
-impl<T: Read + Write> SignOnMeter<T> {
-    /// Instantiate a new meter
-    pub fn new_meter(channel: T, prices: &Prices, keys: Keys) -> SignOnMeter<T> {
-        SignOnMeter {
-            role: Role::Meter,
-            channel: channel,
-            running_total: 0.0,
-            prices: *prices.clone(),
-            keys: keys,
-        }
-    }
-
-    /// Instantiate a new server (utility provider)
-    pub fn new_server(channel: T, keys: Keys) -> SignOnMeter<T> {
-        SignOnMeter {
-            role: Role::Server,
-            channel: channel,
-            running_total: 0.0,
-            prices: [0.0; 7*24],
-            keys: keys,
-        }
-    }
-}
-
-/// Consumption information for billing. In this case it is the units consumed in a particular hour
+/// Consumption information for hourly time of use billing
+#[derive(Debug)]
 pub struct Consumption {
     /// The hour in the week: e.g. 7am on a Tuesday would be 24+7 hours.
-    hour_of_week: u8,
+    pub hour_of_week: u8,
     /// The number of units of the utility which were consumed in the last hour
-    units_consumed: f32,
+    pub units_consumed: f32,
 }
 
 impl Consumption {
     /// Checks that the values stored in a Consumption object are legal
     pub fn is_valid(&self) -> bool {
-        if self.hour_of_week > (24 * 7) {
+        if self.hour_of_week > ((24 * 7) - 1) {
             return false;
         }
 
@@ -97,9 +70,13 @@ impl Consumption {
     }
 }
 
-impl<T: Read + Write> BillingProtocol for SignOnMeter<T> {
+impl<T: Read + Write> BillingProtocol<T> for SignOnMeter<T> {
     type Consumption = Consumption;
     type Prices = Prices;
+
+    fn null_prices() -> Self::Prices {
+        [0.0; 7*24]
+    }
 
     fn consume(&mut self, consumption: &Self::Consumption) {
         assert!(self.role == Role::Meter);
@@ -109,11 +86,11 @@ impl<T: Read + Write> BillingProtocol for SignOnMeter<T> {
         const BUF_LEN: usize = 4 * 7 * 24 + sign::SIGNATUREBYTES; // size_of apparently doesn't do constants
         let mut buf: [u8; BUF_LEN] = [0; BUF_LEN];
 
-        loop { // in case several messages have been sent
+        'messages: loop { // in case several messages have been sent
             let update_prices = match self.channel.read(&mut buf) {
                 Ok(s) => { assert_eq!(s, buf.len()); true },
                 Err(e) => match e.kind() {
-                    ErrorKind::TimedOut => false,
+                    ErrorKind::WouldBlock => false,
                     _ => panic!("Device read failed with error {}", e),
                 },
             };
@@ -137,11 +114,15 @@ impl<T: Read + Write> BillingProtocol for SignOnMeter<T> {
                     new_prices[i] = unsafe {
                         transmute::<[u8; 4], f32>(these_bytes)
                     };
+
+                    if new_prices[i] < 0.0 {
+                        panic!("Invalid price is less than 0");
+                    }
                 }
 
                 self.prices = new_prices;
             } else {
-                break;
+                break 'messages;
             }
         }
 
@@ -175,34 +156,31 @@ impl<T: Read + Write> BillingProtocol for SignOnMeter<T> {
 
         // check for any new bills that have been sent
         loop { // in case several have been sent
-            let update = match self.channel.read(&mut buf) {
-                Ok(s) => { assert_eq!(s, buf.len()); true },
+            match self.channel.read(&mut buf) {
+                Ok(s) => assert_eq!(s, buf.len()),
                 Err(e) => match e.kind() {
-                    ErrorKind::TimedOut => false,
+                    ErrorKind::TimedOut => {thread::sleep(Duration::from_secs(1)); continue},
                     _ => panic!("Device read failed with error {}", e),
                 },
             };
 
-            if update {
-                let data_buf = match sign::verify(&buf, &self.keys.their_pk) {
-                    Ok(b) => b,
-                    Err(_) => { drop(self); panic!("Verification of new bill failed") },
-                };
+            let data_buf = match sign::verify(&buf, &self.keys.their_pk) {
+                Ok(b) => b,
+                Err(_) => { drop(self); panic!("Verification of new bill failed") },
+            };
 
-                let mut new_bill_bytes = [0; 8];
+            let mut new_bill_bytes = [0; 8];
 
-                for i in 0..8 {
-                    new_bill_bytes[i] = data_buf[i];
-                }
-
-                let new_bill = unsafe {
-                    transmute::<[u8; 8], f64>(new_bill_bytes)
-                };
-
-                self.running_total += new_bill;
-            } else {
-                break;
+            for i in 0..8 {
+                new_bill_bytes[i] = data_buf[i];
             }
+
+            let new_bill = unsafe {
+                transmute::<[u8; 8], f64>(new_bill_bytes)
+            };
+
+            self.running_total += new_bill;
+            break;
         }
                 
         let ret = self.running_total;
@@ -223,5 +201,25 @@ impl<T: Read + Write> BillingProtocol for SignOnMeter<T> {
             Ok(s) => assert_eq!(s, sbuf.len()),
             Err(e) => panic!("Failed to write the new prices with error {}", e),
         };
+    }
+
+    fn new_meter(channel: T, prices: &Prices, keys: super::Keys) -> SignOnMeter<T> {
+        SignOnMeter {
+            role: Role::Meter,
+            channel: channel,
+            running_total: 0.0,
+            prices: *prices.clone(),
+            keys: keys,
+        }
+    }
+
+    fn new_server(channel: T, keys: super::Keys) -> SignOnMeter<T> {
+        SignOnMeter {
+            role: Role::Server,
+            channel: channel,
+            running_total: 0.0,
+            prices: [0.0; 7*24],
+            keys: keys,
+        }
     }
 }
