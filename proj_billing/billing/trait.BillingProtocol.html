@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="rustdoc">
+    <meta name="description" content="API documentation for the Rust `BillingProtocol` trait in crate `proj_billing`.">
+    <meta name="keywords" content="rust, rustlang, rust-lang, BillingProtocol">
+
+    <title>proj_billing::billing::BillingProtocol - Rust</title>
+
+    <link rel="stylesheet" type="text/css" href="../../rustdoc.css">
+    <link rel="stylesheet" type="text/css" href="../../main.css">
+    
+
+    
+    
+</head>
+<body class="rustdoc">
+    <!--[if lte IE 8]>
+    <div class="warning">
+        This old browser is unsupported and will most likely display funky
+        things.
+    </div>
+    <![endif]-->
+
+    
+
+    <nav class="sidebar">
+        
+        <p class='location'><a href='../index.html'>proj_billing</a>::<wbr><a href='index.html'>billing</a></p><script>window.sidebarCurrent = {name: 'BillingProtocol', ty: 'trait', relpath: ''};</script><script defer src="sidebar-items.js"></script>
+    </nav>
+
+    <nav class="sub">
+        <form class="search-form js-only">
+            <div class="search-container">
+                <input class="search-input" name="search"
+                       autocomplete="off"
+                       placeholder="Click or press ‘S’ to search, ‘?’ for more options…"
+                       type="search">
+            </div>
+        </form>
+    </nav>
+
+    <section id='main' class="content trait">
+<h1 class='fqn'><span class='in-band'>Trait <a href='../index.html'>proj_billing</a>::<wbr><a href='index.html'>billing</a>::<wbr><a class='trait' href=''>BillingProtocol</a></span><span class='out-of-band'><span id='render-detail'>
+                   <a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">
+                       [<span class='inner'>&#x2212;</span>]
+                   </a>
+               </span><a id='src-13' class='srclink' href='../../src/proj_billing/src/billing/mod.rs.html#127-156' title='goto source code'>[src]</a></span></h1>
+<pre class='rust trait'>pub trait BillingProtocol&lt;T:&nbsp;<a class='trait' href='https://doc.rust-lang.org/nightly/std/io/trait.Read.html' title='std::io::Read'>Read</a> + <a class='trait' href='https://doc.rust-lang.org/nightly/std/io/trait.Write.html' title='std::io::Write'>Write</a>&gt; {
+    type <a href='#associatedtype.Consumption' class='type'>Consumption</a>;
+    type <a href='#associatedtype.Prices' class='type'>Prices</a>;
+    fn <a href='#tymethod.null_prices' class='fnname'>null_prices</a>() -&gt; Self::Prices;
+    fn <a href='#tymethod.consume' class='fnname'>consume</a>(&amp;mut self, consumption: &amp;Self::Consumption);
+    fn <a href='#tymethod.send_billing_information' class='fnname'>send_billing_information</a>(&amp;mut self);
+    fn <a href='#tymethod.pay_bill' class='fnname'>pay_bill</a>(&amp;mut self) -&gt; <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.f64.html'>f64</a>;
+    fn <a href='#tymethod.change_prices' class='fnname'>change_prices</a>(&amp;mut self, prices: &amp;Self::Prices);
+    fn <a href='#tymethod.new_meter' class='fnname'>new_meter</a>(channel: T, prices: &amp;Self::Prices, keys: <a class='struct' href='../../proj_billing/billing/struct.Keys.html' title='proj_billing::billing::Keys'>Keys</a>) -&gt; Self;
+    fn <a href='#tymethod.new_server' class='fnname'>new_server</a>(channel: T, keys: <a class='struct' href='../../proj_billing/billing/struct.Keys.html' title='proj_billing::billing::Keys'>Keys</a>) -&gt; Self;
+}</pre><div class='docblock'><p>Functionality which all billing protocols must provide.</p>
+
+<p>The first type argument it the channel over which communication occurs. This should probably be a proj_net::{Server, Client}.
+The second type argument is the return value of the constructors (i.e the structure implementing this trait)</p>
+</div>
+            <h2 id='associated-types'>Associated Types</h2>
+            <div class='methods'>
+        <h3 id='associatedtype.Consumption' class='method stab '><code>type <a href='#associatedtype.Consumption' class='type'>Consumption</a></code></h3><div class='docblock'><p>Consumption information for billing e.g. the time of consumption and the units consumed</p>
+</div><h3 id='associatedtype.Prices' class='method stab '><code>type <a href='#associatedtype.Prices' class='type'>Prices</a></code></h3><div class='docblock'><p>Information used to calculate the bill (e.g. coefficients for each in which a unit could be consumed)</p>
+</div></div>
+            <h2 id='required-methods'>Required Methods</h2>
+            <div class='methods'>
+        <h3 id='tymethod.null_prices' class='method stab '><code>fn <a href='#tymethod.null_prices' class='fnname'>null_prices</a>() -&gt; Self::Prices</code></h3><div class='docblock'><p>returns a null Prices object</p>
+</div><h3 id='tymethod.consume' class='method stab '><code>fn <a href='#tymethod.consume' class='fnname'>consume</a>(&amp;mut self, consumption: &amp;Self::Consumption)</code></h3><div class='docblock'><p>To be run on the meter.
+This function should check for any new prices, and then add the price of consumption to the running bill</p>
+</div><h3 id='tymethod.send_billing_information' class='method stab '><code>fn <a href='#tymethod.send_billing_information' class='fnname'>send_billing_information</a>(&amp;mut self)</code></h3><div class='docblock'><p>Get the server up to speed with the current billing information: a message from the device to the server.</p>
+</div><h3 id='tymethod.pay_bill' class='method stab '><code>fn <a href='#tymethod.pay_bill' class='fnname'>pay_bill</a>(&amp;mut self) -&gt; <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.f64.html'>f64</a></code></h3><div class='docblock'><p>Pay bill (run on the server)
+This will block until it has received the billing information from the meter (via send_billing_information)</p>
+</div><h3 id='tymethod.change_prices' class='method stab '><code>fn <a href='#tymethod.change_prices' class='fnname'>change_prices</a>(&amp;mut self, prices: &amp;Self::Prices)</code></h3><div class='docblock'><p>Change the way bills are calculated. This is a message sent from the server (utility company) to the meter.</p>
+</div><h3 id='tymethod.new_meter' class='method stab '><code>fn <a href='#tymethod.new_meter' class='fnname'>new_meter</a>(channel: T, prices: &amp;Self::Prices, keys: <a class='struct' href='../../proj_billing/billing/struct.Keys.html' title='proj_billing::billing::Keys'>Keys</a>) -&gt; Self</code></h3><div class='docblock'><p>Instantiate a new meter</p>
+</div><h3 id='tymethod.new_server' class='method stab '><code>fn <a href='#tymethod.new_server' class='fnname'>new_server</a>(channel: T, keys: <a class='struct' href='../../proj_billing/billing/struct.Keys.html' title='proj_billing::billing::Keys'>Keys</a>) -&gt; Self</code></h3><div class='docblock'><p>Instantiate a new server</p>
+</div></div>
+        <h2 id='implementors'>Implementors</h2>
+        <ul class='item-list' id='implementors-list'>
+    <li><code>impl&lt;T:&nbsp;<a class='trait' href='https://doc.rust-lang.org/nightly/std/io/trait.Read.html' title='std::io::Read'>Read</a> + <a class='trait' href='https://doc.rust-lang.org/nightly/std/io/trait.Write.html' title='std::io::Write'>Write</a>&gt; BillingProtocol&lt;T&gt; for <a class='struct' href='../../proj_billing/billing/sign_on_meter/struct.SignOnMeter.html' title='proj_billing::billing::sign_on_meter::SignOnMeter'>SignOnMeter</a>&lt;T&gt;</code></li>
+</ul><script type="text/javascript" async
+                         src="../../implementors/proj_billing/billing/trait.BillingProtocol.js">
+                 </script></section>
+    <section id='search' class="content hidden"></section>
+
+    <section class="footer"></section>
+
+    <aside id="help" class="hidden">
+        <div>
+            <h1 class="hidden">Help</h1>
+
+            <div class="shortcuts">
+                <h2>Keyboard Shortcuts</h2>
+
+                <dl>
+                    <dt>?</dt>
+                    <dd>Show this help dialog</dd>
+                    <dt>S</dt>
+                    <dd>Focus the search field</dd>
+                    <dt>&larrb;</dt>
+                    <dd>Move up in search results</dd>
+                    <dt>&rarrb;</dt>
+                    <dd>Move down in search results</dd>
+                    <dt>&#9166;</dt>
+                    <dd>Go to active search result</dd>
+                    <dt>+</dt>
+                    <dd>Collapse/expand all sections</dd>
+                </dl>
+            </div>
+
+            <div class="infos">
+                <h2>Search Tricks</h2>
+
+                <p>
+                    Prefix searches with a type followed by a colon (e.g.
+                    <code>fn:</code>) to restrict the search to a given type.
+                </p>
+
+                <p>
+                    Accepted types are: <code>fn</code>, <code>mod</code>,
+                    <code>struct</code>, <code>enum</code>,
+                    <code>trait</code>, <code>type</code>, <code>macro</code>,
+                    and <code>const</code>.
+                </p>
+
+                <p>
+                    Search functions by type signature (e.g.
+                    <code>vec -> usize</code> or <code>* -> vec</code>)
+                </p>
+            </div>
+        </div>
+    </aside>
+
+    
+
+    <script>
+        window.rootPath = "../../";
+        window.currentCrate = "proj_billing";
+        window.playgroundUrl = "";
+    </script>
+    <script src="../../jquery.js"></script>
+    <script src="../../main.js"></script>
+    
+    <script defer src="../../search-index.js"></script>
+</body>
+</html>
