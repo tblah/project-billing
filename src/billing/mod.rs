@@ -13,18 +13,23 @@
 //! use proj_net::server;
 //! use proj_net::client::Client;
 //! use proj_net::client;
-//! use proj_crypto::asymmetric::key_exchange;
+//! use proj_net::Keypair;
+//! use proj_crypto::asymmetric::key_exchange::gen_keypair;
 //! use proj_crypto::asymmetric::sign;
+//! use proj_crypto::asymmetric::key_id;
+//! use proj_crypto::asymmetric::PublicKey ;
 //! use proj_billing::billing;
 //! use proj_billing::billing::sign_on_meter::SignOnMeter;
 //! use proj_billing::billing::BillingProtocol;
 //! use std::thread;
+//! use std::collections::HashMap;
 //! use std::time::Duration;
 //! 
 //! 
-//! fn server_thread(sign_keys: billing::Keys, exchange_keys: key_exchange::LongTermKeys,
+//! fn server_thread(sign_keys: billing::Keys, exchange_keypair: Keypair, pks: HashMap<key_id::PublicKeyId, PublicKey>,
 //!                  prices: <SignOnMeter<Server> as BillingProtocol<Server>>::Prices, socket: &str) -> f64 {
-//!     let mut stream = server::start(socket, exchange_keys).unwrap();
+//!     let mut listener = server::listen(socket).unwrap();
+//!     let mut stream = server::do_key_exchange(listener.incoming().next().unwrap(), &exchange_keypair, &pks).unwrap();
 //!
 //!     let mut server = SignOnMeter::new_server(stream, sign_keys);
 //!     
@@ -33,11 +38,11 @@
 //!     server.pay_bill()
 //! }
 //!
-//! fn meter_thread(keys: billing::Keys, exchange_keys: key_exchange::LongTermKeys,
+//! fn meter_thread(keys: billing::Keys, exchange_keypair: Keypair, pks: HashMap<key_id::PublicKeyId, PublicKey>,
 //!                 cons: <SignOnMeter<Client> as BillingProtocol<Client>>::Consumption, socket: &str) {
 //!     thread::sleep(Duration::from_millis(2)); // wait for the server to start
 //!
-//!     let mut stream = client::start(socket, exchange_keys).unwrap();
+//!     let mut stream = client::start(socket, exchange_keypair, &pks).unwrap();
 //!     stream.blocking_off(5);
 //!
 //!     let ref prices = &<SignOnMeter<Client> as BillingProtocol<Client>>::null_prices();
@@ -67,20 +72,12 @@
 //!         their_pk: m_pk_s,
 //!     };
 //!
-//!     let (m_pk_e, m_sk_e) = key_exchange::gen_keypair();
-//!     let (s_pk_e, s_sk_e) = key_exchange::gen_keypair();
-//!
-//!     let m_keys_e = key_exchange::LongTermKeys {
-//!         my_public_key: m_pk_e.clone(),
-//!         my_secret_key: m_sk_e,
-//!         their_public_key: s_pk_e.clone(),
-//!     };
-//!
-//!     let s_keys_e = key_exchange::LongTermKeys {
-//!         my_public_key: s_pk_e,
-//!         my_secret_key: s_sk_e,
-//!         their_public_key: m_pk_e,
-//!     };
+//!     let m_keypair = gen_keypair();
+//!     let s_keypair = gen_keypair();
+//!     let mut pks = HashMap::new();
+//!     pks.insert(key_id::id_of_pk(&m_keypair.0), m_keypair.0.clone());
+//!     pks.insert(key_id::id_of_pk(&s_keypair.0), s_keypair.0.clone());
+//!     let pks_server = pks.clone();
 //!
 //!     let consumption = <SignOnMeter<Client> as BillingProtocol<Client>>::Consumption::new(0, 1.0);
 //!
@@ -88,8 +85,8 @@
 //!
 //!     let socket_path_clone = socket_path.clone();
 //!     let socket_path_clone2 = socket_path.clone();
-//!     let server_thread = thread::spawn(move || -> f64 {server_thread(s_keys_s, s_keys_e, prices, socket_path_clone)});  
-//!     let _ = thread::spawn(move || {meter_thread(m_keys_s, m_keys_e, consumption, socket_path_clone2);}); 
+//!     let server_thread = thread::spawn(move || -> f64 {server_thread(s_keys_s, s_keypair, pks_server, prices, socket_path_clone)});  
+//!     let _ = thread::spawn(move || {meter_thread(m_keys_s, m_keypair, pks, consumption, socket_path_clone2);}); 
 //!
 //!     let ret = server_thread.join().unwrap();
 //!
