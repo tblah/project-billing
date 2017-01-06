@@ -346,9 +346,6 @@
 <span id="302">302</span>
 <span id="303">303</span>
 <span id="304">304</span>
-<span id="305">305</span>
-<span id="306">306</span>
-<span id="307">307</span>
 </pre><pre class='rust '>
 <span class='doccomment'>//! # Contains the billing protocols I have implemented.</span>
 <span class='doccomment'>//!</span>
@@ -365,18 +362,23 @@
 <span class='doccomment'>//! use proj_net::server;</span>
 <span class='doccomment'>//! use proj_net::client::Client;</span>
 <span class='doccomment'>//! use proj_net::client;</span>
-<span class='doccomment'>//! use proj_crypto::asymmetric::key_exchange;</span>
+<span class='doccomment'>//! use proj_net::Keypair;</span>
+<span class='doccomment'>//! use proj_crypto::asymmetric::key_exchange::gen_keypair;</span>
 <span class='doccomment'>//! use proj_crypto::asymmetric::sign;</span>
+<span class='doccomment'>//! use proj_crypto::asymmetric::key_id;</span>
+<span class='doccomment'>//! use proj_crypto::asymmetric::PublicKey ;</span>
 <span class='doccomment'>//! use proj_billing::billing;</span>
 <span class='doccomment'>//! use proj_billing::billing::sign_on_meter::SignOnMeter;</span>
 <span class='doccomment'>//! use proj_billing::billing::BillingProtocol;</span>
 <span class='doccomment'>//! use std::thread;</span>
+<span class='doccomment'>//! use std::collections::HashMap;</span>
 <span class='doccomment'>//! use std::time::Duration;</span>
 <span class='doccomment'>//! </span>
 <span class='doccomment'>//! </span>
-<span class='doccomment'>//! fn server_thread(sign_keys: billing::Keys, exchange_keys: key_exchange::LongTermKeys,</span>
+<span class='doccomment'>//! fn server_thread(sign_keys: billing::Keys, exchange_keypair: Keypair, pks: HashMap&lt;key_id::PublicKeyId, PublicKey&gt;,</span>
 <span class='doccomment'>//!                  prices: &lt;SignOnMeter&lt;Server&gt; as BillingProtocol&lt;Server&gt;&gt;::Prices, socket: &amp;str) -&gt; f64 {</span>
-<span class='doccomment'>//!     let mut stream = server::start(socket, exchange_keys).unwrap();</span>
+<span class='doccomment'>//!     let mut listener = server::listen(socket).unwrap();</span>
+<span class='doccomment'>//!     let mut stream = server::do_key_exchange(listener.incoming().next().unwrap(), &amp;exchange_keypair, &amp;pks).unwrap();</span>
 <span class='doccomment'>//!</span>
 <span class='doccomment'>//!     let mut server = SignOnMeter::new_server(stream, sign_keys);</span>
 <span class='doccomment'>//!     </span>
@@ -385,11 +387,11 @@
 <span class='doccomment'>//!     server.pay_bill()</span>
 <span class='doccomment'>//! }</span>
 <span class='doccomment'>//!</span>
-<span class='doccomment'>//! fn meter_thread(keys: billing::Keys, exchange_keys: key_exchange::LongTermKeys,</span>
+<span class='doccomment'>//! fn meter_thread(keys: billing::Keys, exchange_keypair: Keypair, pks: HashMap&lt;key_id::PublicKeyId, PublicKey&gt;,</span>
 <span class='doccomment'>//!                 cons: &lt;SignOnMeter&lt;Client&gt; as BillingProtocol&lt;Client&gt;&gt;::Consumption, socket: &amp;str) {</span>
 <span class='doccomment'>//!     thread::sleep(Duration::from_millis(2)); // wait for the server to start</span>
 <span class='doccomment'>//!</span>
-<span class='doccomment'>//!     let mut stream = client::start(socket, exchange_keys).unwrap();</span>
+<span class='doccomment'>//!     let mut stream = client::start(socket, exchange_keypair, &amp;pks).unwrap();</span>
 <span class='doccomment'>//!     stream.blocking_off(5);</span>
 <span class='doccomment'>//!</span>
 <span class='doccomment'>//!     let ref prices = &amp;&lt;SignOnMeter&lt;Client&gt; as BillingProtocol&lt;Client&gt;&gt;::null_prices();</span>
@@ -419,20 +421,12 @@
 <span class='doccomment'>//!         their_pk: m_pk_s,</span>
 <span class='doccomment'>//!     };</span>
 <span class='doccomment'>//!</span>
-<span class='doccomment'>//!     let (m_pk_e, m_sk_e) = key_exchange::gen_keypair();</span>
-<span class='doccomment'>//!     let (s_pk_e, s_sk_e) = key_exchange::gen_keypair();</span>
-<span class='doccomment'>//!</span>
-<span class='doccomment'>//!     let m_keys_e = key_exchange::LongTermKeys {</span>
-<span class='doccomment'>//!         my_public_key: m_pk_e.clone(),</span>
-<span class='doccomment'>//!         my_secret_key: m_sk_e,</span>
-<span class='doccomment'>//!         their_public_key: s_pk_e.clone(),</span>
-<span class='doccomment'>//!     };</span>
-<span class='doccomment'>//!</span>
-<span class='doccomment'>//!     let s_keys_e = key_exchange::LongTermKeys {</span>
-<span class='doccomment'>//!         my_public_key: s_pk_e,</span>
-<span class='doccomment'>//!         my_secret_key: s_sk_e,</span>
-<span class='doccomment'>//!         their_public_key: m_pk_e,</span>
-<span class='doccomment'>//!     };</span>
+<span class='doccomment'>//!     let m_keypair = gen_keypair();</span>
+<span class='doccomment'>//!     let s_keypair = gen_keypair();</span>
+<span class='doccomment'>//!     let mut pks = HashMap::new();</span>
+<span class='doccomment'>//!     pks.insert(key_id::id_of_pk(&amp;m_keypair.0), m_keypair.0.clone());</span>
+<span class='doccomment'>//!     pks.insert(key_id::id_of_pk(&amp;s_keypair.0), s_keypair.0.clone());</span>
+<span class='doccomment'>//!     let pks_server = pks.clone();</span>
 <span class='doccomment'>//!</span>
 <span class='doccomment'>//!     let consumption = &lt;SignOnMeter&lt;Client&gt; as BillingProtocol&lt;Client&gt;&gt;::Consumption::new(0, 1.0);</span>
 <span class='doccomment'>//!</span>
@@ -440,8 +434,8 @@
 <span class='doccomment'>//!</span>
 <span class='doccomment'>//!     let socket_path_clone = socket_path.clone();</span>
 <span class='doccomment'>//!     let socket_path_clone2 = socket_path.clone();</span>
-<span class='doccomment'>//!     let server_thread = thread::spawn(move || -&gt; f64 {server_thread(s_keys_s, s_keys_e, prices, socket_path_clone)});  </span>
-<span class='doccomment'>//!     let _ = thread::spawn(move || {meter_thread(m_keys_s, m_keys_e, consumption, socket_path_clone2);}); </span>
+<span class='doccomment'>//!     let server_thread = thread::spawn(move || -&gt; f64 {server_thread(s_keys_s, s_keypair, pks_server, prices, socket_path_clone)});  </span>
+<span class='doccomment'>//!     let _ = thread::spawn(move || {meter_thread(m_keys_s, m_keypair, pks, consumption, socket_path_clone2);}); </span>
 <span class='doccomment'>//!</span>
 <span class='doccomment'>//!     let ret = server_thread.join().unwrap();</span>
 <span class='doccomment'>//!</span>

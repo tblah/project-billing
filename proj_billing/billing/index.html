@@ -47,7 +47,7 @@
                    <a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">
                        [<span class='inner'>&#x2212;</span>]
                    </a>
-               </span><a id='src-7' class='srclink' href='../../src/proj_billing/src/billing/mod.rs.html#1-306' title='goto source code'>[src]</a></span></h1>
+               </span><a id='src-7' class='srclink' href='../../src/proj_billing/src/billing/mod.rs.html#1-303' title='goto source code'>[src]</a></span></h1>
 <div class='docblock'>
 <h1 id='contains-the-billing-protocols-i-have-implemented' class='section-header'><a href='#contains-the-billing-protocols-i-have-implemented'>Contains the billing protocols I have implemented.</a></h1>
 <p>Stuff common to all of the protocols is included in this file</p>
@@ -63,18 +63,23 @@
 <span class='kw'>use</span> <span class='ident'>proj_net</span>::<span class='ident'>server</span>;
 <span class='kw'>use</span> <span class='ident'>proj_net</span>::<span class='ident'>client</span>::<span class='ident'>Client</span>;
 <span class='kw'>use</span> <span class='ident'>proj_net</span>::<span class='ident'>client</span>;
-<span class='kw'>use</span> <span class='ident'>proj_crypto</span>::<span class='ident'>asymmetric</span>::<span class='ident'>key_exchange</span>;
+<span class='kw'>use</span> <span class='ident'>proj_net</span>::<span class='ident'>Keypair</span>;
+<span class='kw'>use</span> <span class='ident'>proj_crypto</span>::<span class='ident'>asymmetric</span>::<span class='ident'>key_exchange</span>::<span class='ident'>gen_keypair</span>;
 <span class='kw'>use</span> <span class='ident'>proj_crypto</span>::<span class='ident'>asymmetric</span>::<span class='ident'>sign</span>;
+<span class='kw'>use</span> <span class='ident'>proj_crypto</span>::<span class='ident'>asymmetric</span>::<span class='ident'>key_id</span>;
+<span class='kw'>use</span> <span class='ident'>proj_crypto</span>::<span class='ident'>asymmetric</span>::<span class='ident'>PublicKey</span> ;
 <span class='kw'>use</span> <span class='ident'>proj_billing</span>::<span class='ident'>billing</span>;
 <span class='kw'>use</span> <span class='ident'>proj_billing</span>::<span class='ident'>billing</span>::<span class='ident'>sign_on_meter</span>::<span class='ident'>SignOnMeter</span>;
 <span class='kw'>use</span> <span class='ident'>proj_billing</span>::<span class='ident'>billing</span>::<span class='ident'>BillingProtocol</span>;
 <span class='kw'>use</span> <span class='ident'>std</span>::<span class='ident'>thread</span>;
+<span class='kw'>use</span> <span class='ident'>std</span>::<span class='ident'>collections</span>::<span class='ident'>HashMap</span>;
 <span class='kw'>use</span> <span class='ident'>std</span>::<span class='ident'>time</span>::<span class='ident'>Duration</span>;
  
  
-<span class='kw'>fn</span> <span class='ident'>server_thread</span>(<span class='ident'>sign_keys</span>: <span class='ident'>billing</span>::<span class='ident'>Keys</span>, <span class='ident'>exchange_keys</span>: <span class='ident'>key_exchange</span>::<span class='ident'>LongTermKeys</span>,
+<span class='kw'>fn</span> <span class='ident'>server_thread</span>(<span class='ident'>sign_keys</span>: <span class='ident'>billing</span>::<span class='ident'>Keys</span>, <span class='ident'>exchange_keypair</span>: <span class='ident'>Keypair</span>, <span class='ident'>pks</span>: <span class='ident'>HashMap</span><span class='op'>&lt;</span><span class='ident'>key_id</span>::<span class='ident'>PublicKeyId</span>, <span class='ident'>PublicKey</span><span class='op'>&gt;</span>,
                  <span class='ident'>prices</span>: <span class='op'>&lt;</span><span class='ident'>SignOnMeter</span><span class='op'>&lt;</span><span class='ident'>Server</span><span class='op'>&gt;</span> <span class='kw'>as</span> <span class='ident'>BillingProtocol</span><span class='op'>&lt;</span><span class='ident'>Server</span><span class='op'>&gt;&gt;</span>::<span class='ident'>Prices</span>, <span class='ident'>socket</span>: <span class='kw-2'>&amp;</span><span class='ident'>str</span>) <span class='op'>-&gt;</span> <span class='ident'>f64</span> {
-    <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>stream</span> <span class='op'>=</span> <span class='ident'>server</span>::<span class='ident'>start</span>(<span class='ident'>socket</span>, <span class='ident'>exchange_keys</span>).<span class='ident'>unwrap</span>();
+    <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>listener</span> <span class='op'>=</span> <span class='ident'>server</span>::<span class='ident'>listen</span>(<span class='ident'>socket</span>).<span class='ident'>unwrap</span>();
+    <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>stream</span> <span class='op'>=</span> <span class='ident'>server</span>::<span class='ident'>do_key_exchange</span>(<span class='ident'>listener</span>.<span class='ident'>incoming</span>().<span class='ident'>next</span>().<span class='ident'>unwrap</span>(), <span class='kw-2'>&amp;</span><span class='ident'>exchange_keypair</span>, <span class='kw-2'>&amp;</span><span class='ident'>pks</span>).<span class='ident'>unwrap</span>();
 
     <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>server</span> <span class='op'>=</span> <span class='ident'>SignOnMeter</span>::<span class='ident'>new_server</span>(<span class='ident'>stream</span>, <span class='ident'>sign_keys</span>);
      
@@ -83,11 +88,11 @@
     <span class='ident'>server</span>.<span class='ident'>pay_bill</span>()
 }
 
-<span class='kw'>fn</span> <span class='ident'>meter_thread</span>(<span class='ident'>keys</span>: <span class='ident'>billing</span>::<span class='ident'>Keys</span>, <span class='ident'>exchange_keys</span>: <span class='ident'>key_exchange</span>::<span class='ident'>LongTermKeys</span>,
+<span class='kw'>fn</span> <span class='ident'>meter_thread</span>(<span class='ident'>keys</span>: <span class='ident'>billing</span>::<span class='ident'>Keys</span>, <span class='ident'>exchange_keypair</span>: <span class='ident'>Keypair</span>, <span class='ident'>pks</span>: <span class='ident'>HashMap</span><span class='op'>&lt;</span><span class='ident'>key_id</span>::<span class='ident'>PublicKeyId</span>, <span class='ident'>PublicKey</span><span class='op'>&gt;</span>,
                 <span class='ident'>cons</span>: <span class='op'>&lt;</span><span class='ident'>SignOnMeter</span><span class='op'>&lt;</span><span class='ident'>Client</span><span class='op'>&gt;</span> <span class='kw'>as</span> <span class='ident'>BillingProtocol</span><span class='op'>&lt;</span><span class='ident'>Client</span><span class='op'>&gt;&gt;</span>::<span class='ident'>Consumption</span>, <span class='ident'>socket</span>: <span class='kw-2'>&amp;</span><span class='ident'>str</span>) {
     <span class='ident'>thread</span>::<span class='ident'>sleep</span>(<span class='ident'>Duration</span>::<span class='ident'>from_millis</span>(<span class='number'>2</span>)); <span class='comment'>// wait for the server to start</span>
 
-    <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>stream</span> <span class='op'>=</span> <span class='ident'>client</span>::<span class='ident'>start</span>(<span class='ident'>socket</span>, <span class='ident'>exchange_keys</span>).<span class='ident'>unwrap</span>();
+    <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>stream</span> <span class='op'>=</span> <span class='ident'>client</span>::<span class='ident'>start</span>(<span class='ident'>socket</span>, <span class='ident'>exchange_keypair</span>, <span class='kw-2'>&amp;</span><span class='ident'>pks</span>).<span class='ident'>unwrap</span>();
     <span class='ident'>stream</span>.<span class='ident'>blocking_off</span>(<span class='number'>5</span>);
 
     <span class='kw'>let</span> <span class='kw-2'>ref</span> <span class='ident'>prices</span> <span class='op'>=</span> <span class='kw-2'>&amp;</span><span class='op'>&lt;</span><span class='ident'>SignOnMeter</span><span class='op'>&lt;</span><span class='ident'>Client</span><span class='op'>&gt;</span> <span class='kw'>as</span> <span class='ident'>BillingProtocol</span><span class='op'>&lt;</span><span class='ident'>Client</span><span class='op'>&gt;&gt;</span>::<span class='ident'>null_prices</span>();
@@ -117,20 +122,12 @@
         <span class='ident'>their_pk</span>: <span class='ident'>m_pk_s</span>,
     };
 
-    <span class='kw'>let</span> (<span class='ident'>m_pk_e</span>, <span class='ident'>m_sk_e</span>) <span class='op'>=</span> <span class='ident'>key_exchange</span>::<span class='ident'>gen_keypair</span>();
-    <span class='kw'>let</span> (<span class='ident'>s_pk_e</span>, <span class='ident'>s_sk_e</span>) <span class='op'>=</span> <span class='ident'>key_exchange</span>::<span class='ident'>gen_keypair</span>();
-
-    <span class='kw'>let</span> <span class='ident'>m_keys_e</span> <span class='op'>=</span> <span class='ident'>key_exchange</span>::<span class='ident'>LongTermKeys</span> {
-        <span class='ident'>my_public_key</span>: <span class='ident'>m_pk_e</span>.<span class='ident'>clone</span>(),
-        <span class='ident'>my_secret_key</span>: <span class='ident'>m_sk_e</span>,
-        <span class='ident'>their_public_key</span>: <span class='ident'>s_pk_e</span>.<span class='ident'>clone</span>(),
-    };
-
-    <span class='kw'>let</span> <span class='ident'>s_keys_e</span> <span class='op'>=</span> <span class='ident'>key_exchange</span>::<span class='ident'>LongTermKeys</span> {
-        <span class='ident'>my_public_key</span>: <span class='ident'>s_pk_e</span>,
-        <span class='ident'>my_secret_key</span>: <span class='ident'>s_sk_e</span>,
-        <span class='ident'>their_public_key</span>: <span class='ident'>m_pk_e</span>,
-    };
+    <span class='kw'>let</span> <span class='ident'>m_keypair</span> <span class='op'>=</span> <span class='ident'>gen_keypair</span>();
+    <span class='kw'>let</span> <span class='ident'>s_keypair</span> <span class='op'>=</span> <span class='ident'>gen_keypair</span>();
+    <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>pks</span> <span class='op'>=</span> <span class='ident'>HashMap</span>::<span class='ident'>new</span>();
+    <span class='ident'>pks</span>.<span class='ident'>insert</span>(<span class='ident'>key_id</span>::<span class='ident'>id_of_pk</span>(<span class='kw-2'>&amp;</span><span class='ident'>m_keypair</span>.<span class='number'>0</span>), <span class='ident'>m_keypair</span>.<span class='number'>0</span>.<span class='ident'>clone</span>());
+    <span class='ident'>pks</span>.<span class='ident'>insert</span>(<span class='ident'>key_id</span>::<span class='ident'>id_of_pk</span>(<span class='kw-2'>&amp;</span><span class='ident'>s_keypair</span>.<span class='number'>0</span>), <span class='ident'>s_keypair</span>.<span class='number'>0</span>.<span class='ident'>clone</span>());
+    <span class='kw'>let</span> <span class='ident'>pks_server</span> <span class='op'>=</span> <span class='ident'>pks</span>.<span class='ident'>clone</span>();
 
     <span class='kw'>let</span> <span class='ident'>consumption</span> <span class='op'>=</span> <span class='op'>&lt;</span><span class='ident'>SignOnMeter</span><span class='op'>&lt;</span><span class='ident'>Client</span><span class='op'>&gt;</span> <span class='kw'>as</span> <span class='ident'>BillingProtocol</span><span class='op'>&lt;</span><span class='ident'>Client</span><span class='op'>&gt;&gt;</span>::<span class='ident'>Consumption</span>::<span class='ident'>new</span>(<span class='number'>0</span>, <span class='number'>1.0</span>);
 
@@ -138,8 +135,8 @@
 
     <span class='kw'>let</span> <span class='ident'>socket_path_clone</span> <span class='op'>=</span> <span class='ident'>socket_path</span>.<span class='ident'>clone</span>();
     <span class='kw'>let</span> <span class='ident'>socket_path_clone2</span> <span class='op'>=</span> <span class='ident'>socket_path</span>.<span class='ident'>clone</span>();
-    <span class='kw'>let</span> <span class='ident'>server_thread</span> <span class='op'>=</span> <span class='ident'>thread</span>::<span class='ident'>spawn</span>(<span class='kw'>move</span> <span class='op'>||</span> <span class='op'>-&gt;</span> <span class='ident'>f64</span> {<span class='ident'>server_thread</span>(<span class='ident'>s_keys_s</span>, <span class='ident'>s_keys_e</span>, <span class='ident'>prices</span>, <span class='ident'>socket_path_clone</span>)});  
-    <span class='kw'>let</span> _ <span class='op'>=</span> <span class='ident'>thread</span>::<span class='ident'>spawn</span>(<span class='kw'>move</span> <span class='op'>||</span> {<span class='ident'>meter_thread</span>(<span class='ident'>m_keys_s</span>, <span class='ident'>m_keys_e</span>, <span class='ident'>consumption</span>, <span class='ident'>socket_path_clone2</span>);}); 
+    <span class='kw'>let</span> <span class='ident'>server_thread</span> <span class='op'>=</span> <span class='ident'>thread</span>::<span class='ident'>spawn</span>(<span class='kw'>move</span> <span class='op'>||</span> <span class='op'>-&gt;</span> <span class='ident'>f64</span> {<span class='ident'>server_thread</span>(<span class='ident'>s_keys_s</span>, <span class='ident'>s_keypair</span>, <span class='ident'>pks_server</span>, <span class='ident'>prices</span>, <span class='ident'>socket_path_clone</span>)});  
+    <span class='kw'>let</span> _ <span class='op'>=</span> <span class='ident'>thread</span>::<span class='ident'>spawn</span>(<span class='kw'>move</span> <span class='op'>||</span> {<span class='ident'>meter_thread</span>(<span class='ident'>m_keys_s</span>, <span class='ident'>m_keypair</span>, <span class='ident'>pks</span>, <span class='ident'>consumption</span>, <span class='ident'>socket_path_clone2</span>);}); 
 
     <span class='kw'>let</span> <span class='ident'>ret</span> <span class='op'>=</span> <span class='ident'>server_thread</span>.<span class='ident'>join</span>().<span class='ident'>unwrap</span>();
 
