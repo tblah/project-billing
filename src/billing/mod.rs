@@ -40,7 +40,7 @@
 //!
 //! fn meter_thread(keys: billing::Keys, exchange_keypair: Keypair, pks: HashMap<key_id::PublicKeyId, PublicKey>,
 //!                 cons: <SignOnMeter<Client> as BillingProtocol<Client>>::Consumption, socket: &str) {
-//!     thread::sleep(Duration::from_millis(2)); // wait for the server to start
+//!     thread::sleep(Duration::from_millis(20)); // wait for the server to start
 //!
 //!     let mut stream = client::start(socket, exchange_keypair, &pks).unwrap();
 //!     stream.blocking_off(5);
@@ -194,17 +194,31 @@ mod tests {
         server.pay_bill()
     }
 
-    fn meter_thread<T: BillingProtocol<UnixStream>, P: AsRef<Path>>(keys: super::Keys, consumption: LinkedList<T::Consumption>, path: P) {
-        thread::sleep(Duration::from_millis(2)); // wait for the server to start
+    fn meter_thread<T: BillingProtocol<UnixStream>, P: AsRef<Path> +  Clone>(keys: super::Keys, consumption: LinkedList<T::Consumption>, path: P) {
+        let mut remaining_tries = 10;
+        let mut stream_option = None;
 
-        let stream = UnixStream::connect(path).unwrap();
+        while remaining_tries > 0 {
+            thread::sleep(Duration::from_millis(2)); // has the server still not started?
+            let path_clone = path.clone();
+            let stream_result = UnixStream::connect(path_clone);
+            if stream_result.is_ok() {
+                stream_option = Some(stream_result.unwrap());
+                break;
+            }
+            
+            remaining_tries = remaining_tries - 1;
+        };
+
+        let stream = stream_option.unwrap(); // drop mutability, panics if we couldn't connect to the stream
+
         stream.set_nonblocking(true).unwrap();
 
         let ref prices = &T::null_prices();
 
         let mut meter = T::new_meter(stream, prices, keys);
 
-        thread::sleep(Duration::from_millis(2)); // give the server chance to send us it's new prices
+        thread::sleep(Duration::from_millis(20)); // give the server chance to send us it's new prices
 
         for cons in &consumption {
             meter.consume(&cons);
@@ -232,9 +246,10 @@ mod tests {
         let socket_path_clone = socket_path.clone();
         let socket_path_clone2 = socket_path.clone();
         let server_thread = thread::spawn(|| -> f64 {server_thread::<T, P>(s_keys, prices, socket_path_clone)}); // start server
-        let _ = thread::spawn(|| {meter_thread::<T, P>(m_keys, consumption, socket_path_clone2);}); // start meter
+        let meter_thread = thread::spawn(|| {meter_thread::<T, P>(m_keys, consumption, socket_path_clone2);}); // start meter
 
         let ret = server_thread.join().unwrap();
+        let _ = meter_thread.join().unwrap();
 
         // remove the socket file
         remove_file(socket_path).unwrap();
