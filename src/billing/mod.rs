@@ -153,6 +153,7 @@ pub trait BillingProtocol<T: Read + Write> {
 }
 
 pub mod sign_on_meter;
+pub mod consumption;
 
 #[cfg(test)]
 mod tests {

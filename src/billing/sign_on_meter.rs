@@ -16,6 +16,7 @@
     along with project-billing.  If not, see http://www.gnu.org/licenses/.*/
 
 use super::BillingProtocol;
+use super::consumption::*;
 use std::io::{Read, Write, ErrorKind};
 use proj_crypto::asymmetric::sign;
 use std::mem::transmute;
@@ -29,9 +30,6 @@ enum Role {
     Server,
 }
 
-/// Co-efficient for the number of consumption units for each hour of each day of the week
-pub type Prices = [f32; 24*7];
-
 /// State of the billing protocol
 pub struct SignOnMeter<T: Read + Write> {
     /// is this a server or a client?
@@ -44,42 +42,6 @@ pub struct SignOnMeter<T: Read + Write> {
     prices: Prices,
     /// Cryptographic keys for signing responses
     keys: super::Keys,
-}
-
-/// Consumption information for hourly time of use billing
-#[derive(Debug)]
-pub struct Consumption {
-    /// The hour in the week: e.g. 7am on a Tuesday would be 24+7 hours.
-    pub hour_of_week: u8,
-    /// The number of units of the utility which were consumed in the last hour
-    pub units_consumed: f32,
-}
-
-impl Consumption {
-    /// Checks that the values stored in a Consumption object are legal
-    pub fn is_valid(&self) -> bool {
-        if self.hour_of_week > ((24 * 7) - 1) {
-            return false;
-        }
-
-        if self.units_consumed < 0.0 {
-            return false;
-        }
-
-        true
-    }
-
-    /// Instance new consumption
-    pub fn new(hour_of_week: u8, units_consumed: f32) -> Consumption {
-        let ret = Consumption {
-            hour_of_week: hour_of_week,
-            units_consumed: units_consumed,
-        };
-
-        assert!(ret.is_valid());
-
-        ret
-    }
 }
 
 impl<T: Read + Write> BillingProtocol<T> for SignOnMeter<T> {
