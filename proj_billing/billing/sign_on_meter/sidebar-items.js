@@ -1,1 +1,1 @@
-initSidebarItems({"struct":[["Consumption","Consumption information for hourly time of use billing"],["SignOnMeter","State of the billing protocol"]],"type":[["Prices","Co-efficient for the number of consumption units for each hour of each day of the week"]]});
+initSidebarItems({"struct":[["SignOnMeter","State of the billing protocol"]]});

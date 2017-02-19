@@ -47,16 +47,16 @@
                    <a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">
                        [<span class='inner'>&#x2212;</span>]
                    </a>
-               </span><a id='src-13' class='srclink' href='../../src/proj_billing/src/billing/mod.rs.html#124-153' title='goto source code'>[src]</a></span></h1>
+               </span><a class='srclink' href='../../src/proj_billing/billing/mod.rs.html#124-153' title='goto source code'>[src]</a></span></h1>
 <pre class='rust trait'>pub trait BillingProtocol&lt;T:&nbsp;<a class='trait' href='https://doc.rust-lang.org/nightly/std/io/trait.Read.html' title='std::io::Read'>Read</a> + <a class='trait' href='https://doc.rust-lang.org/nightly/std/io/trait.Write.html' title='std::io::Write'>Write</a>&gt; {
     type <a href='#associatedtype.Consumption' class='type'>Consumption</a>;
     type <a href='#associatedtype.Prices' class='type'>Prices</a>;
-    fn <a href='#tymethod.null_prices' class='fnname'>null_prices</a>() -&gt; Self::Prices;
-    fn <a href='#tymethod.consume' class='fnname'>consume</a>(&amp;mut self, consumption: &amp;Self::Consumption);
+    fn <a href='#tymethod.null_prices' class='fnname'>null_prices</a>() -&gt; Self::<a class='trait' href='../../proj_billing/billing/trait.BillingProtocol.html' title='proj_billing::billing::BillingProtocol'>Prices</a>;
+    fn <a href='#tymethod.consume' class='fnname'>consume</a>(&amp;mut self, consumption: &amp;Self::<a class='trait' href='../../proj_billing/billing/trait.BillingProtocol.html' title='proj_billing::billing::BillingProtocol'>Consumption</a>);
     fn <a href='#tymethod.send_billing_information' class='fnname'>send_billing_information</a>(&amp;mut self);
     fn <a href='#tymethod.pay_bill' class='fnname'>pay_bill</a>(&amp;mut self) -&gt; <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.f64.html'>f64</a>;
-    fn <a href='#tymethod.change_prices' class='fnname'>change_prices</a>(&amp;mut self, prices: &amp;Self::Prices);
-    fn <a href='#tymethod.new_meter' class='fnname'>new_meter</a>(channel: T, prices: &amp;Self::Prices, keys: <a class='struct' href='../../proj_billing/billing/struct.Keys.html' title='proj_billing::billing::Keys'>Keys</a>) -&gt; Self;
+    fn <a href='#tymethod.change_prices' class='fnname'>change_prices</a>(&amp;mut self, prices: &amp;Self::<a class='trait' href='../../proj_billing/billing/trait.BillingProtocol.html' title='proj_billing::billing::BillingProtocol'>Prices</a>);
+    fn <a href='#tymethod.new_meter' class='fnname'>new_meter</a>(channel: T, prices: &amp;Self::<a class='trait' href='../../proj_billing/billing/trait.BillingProtocol.html' title='proj_billing::billing::BillingProtocol'>Prices</a>, keys: <a class='struct' href='../../proj_billing/billing/struct.Keys.html' title='proj_billing::billing::Keys'>Keys</a>) -&gt; Self;
     fn <a href='#tymethod.new_server' class='fnname'>new_server</a>(channel: T, keys: <a class='struct' href='../../proj_billing/billing/struct.Keys.html' title='proj_billing::billing::Keys'>Keys</a>) -&gt; Self;
 }</pre><div class='docblock'><p>Functionality which all billing protocols must provide.</p>
 
@@ -65,20 +65,20 @@ The second type argument is the return value of the constructors (i.e the struct
 </div>
             <h2 id='associated-types'>Associated Types</h2>
             <div class='methods'>
-        <h3 id='associatedtype.Consumption' class='method stab '><code>type <a href='#associatedtype.Consumption' class='type'>Consumption</a></code></h3><div class='docblock'><p>Consumption information for billing e.g. the time of consumption and the units consumed</p>
-</div><h3 id='associatedtype.Prices' class='method stab '><code>type <a href='#associatedtype.Prices' class='type'>Prices</a></code></h3><div class='docblock'><p>Information used to calculate the bill (e.g. coefficients for each in which a unit could be consumed)</p>
+        <h3 id='associatedtype.Consumption' class='method stab '><span id='Consumption.t' class='invisible'><code>type <a href='#associatedtype.Consumption' class='type'>Consumption</a></code></span></h3><div class='docblock'><p>Consumption information for billing e.g. the time of consumption and the units consumed</p>
+</div><h3 id='associatedtype.Prices' class='method stab '><span id='Prices.t' class='invisible'><code>type <a href='#associatedtype.Prices' class='type'>Prices</a></code></span></h3><div class='docblock'><p>Information used to calculate the bill (e.g. coefficients for each in which a unit could be consumed)</p>
 </div></div>
             <h2 id='required-methods'>Required Methods</h2>
             <div class='methods'>
-        <h3 id='tymethod.null_prices' class='method stab '><code>fn <a href='#tymethod.null_prices' class='fnname'>null_prices</a>() -&gt; Self::Prices</code></h3><div class='docblock'><p>returns a null Prices object</p>
-</div><h3 id='tymethod.consume' class='method stab '><code>fn <a href='#tymethod.consume' class='fnname'>consume</a>(&amp;mut self, consumption: &amp;Self::Consumption)</code></h3><div class='docblock'><p>To be run on the meter.
+        <h3 id='tymethod.null_prices' class='method stab '><span id='null_prices.v' class='invisible'><code>fn <a href='#tymethod.null_prices' class='fnname'>null_prices</a>() -&gt; Self::<a class='trait' href='../../proj_billing/billing/trait.BillingProtocol.html' title='proj_billing::billing::BillingProtocol'>Prices</a></code></span></h3><div class='docblock'><p>returns a null Prices object</p>
+</div><h3 id='tymethod.consume' class='method stab '><span id='consume.v' class='invisible'><code>fn <a href='#tymethod.consume' class='fnname'>consume</a>(&amp;mut self, consumption: &amp;Self::<a class='trait' href='../../proj_billing/billing/trait.BillingProtocol.html' title='proj_billing::billing::BillingProtocol'>Consumption</a>)</code></span></h3><div class='docblock'><p>To be run on the meter.
 This function should check for any new prices, and then add the price of consumption to the running bill</p>
-</div><h3 id='tymethod.send_billing_information' class='method stab '><code>fn <a href='#tymethod.send_billing_information' class='fnname'>send_billing_information</a>(&amp;mut self)</code></h3><div class='docblock'><p>Get the server up to speed with the current billing information: a message from the device to the server.</p>
-</div><h3 id='tymethod.pay_bill' class='method stab '><code>fn <a href='#tymethod.pay_bill' class='fnname'>pay_bill</a>(&amp;mut self) -&gt; <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.f64.html'>f64</a></code></h3><div class='docblock'><p>Pay bill (run on the server)
+</div><h3 id='tymethod.send_billing_information' class='method stab '><span id='send_billing_information.v' class='invisible'><code>fn <a href='#tymethod.send_billing_information' class='fnname'>send_billing_information</a>(&amp;mut self)</code></span></h3><div class='docblock'><p>Get the server up to speed with the current billing information: a message from the device to the server.</p>
+</div><h3 id='tymethod.pay_bill' class='method stab '><span id='pay_bill.v' class='invisible'><code>fn <a href='#tymethod.pay_bill' class='fnname'>pay_bill</a>(&amp;mut self) -&gt; <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.f64.html'>f64</a></code></span></h3><div class='docblock'><p>Pay bill (run on the server)
 This will block until it has received the billing information from the meter (via send_billing_information)</p>
-</div><h3 id='tymethod.change_prices' class='method stab '><code>fn <a href='#tymethod.change_prices' class='fnname'>change_prices</a>(&amp;mut self, prices: &amp;Self::Prices)</code></h3><div class='docblock'><p>Change the way bills are calculated. This is a message sent from the server (utility company) to the meter.</p>
-</div><h3 id='tymethod.new_meter' class='method stab '><code>fn <a href='#tymethod.new_meter' class='fnname'>new_meter</a>(channel: T, prices: &amp;Self::Prices, keys: <a class='struct' href='../../proj_billing/billing/struct.Keys.html' title='proj_billing::billing::Keys'>Keys</a>) -&gt; Self</code></h3><div class='docblock'><p>Instantiate a new meter</p>
-</div><h3 id='tymethod.new_server' class='method stab '><code>fn <a href='#tymethod.new_server' class='fnname'>new_server</a>(channel: T, keys: <a class='struct' href='../../proj_billing/billing/struct.Keys.html' title='proj_billing::billing::Keys'>Keys</a>) -&gt; Self</code></h3><div class='docblock'><p>Instantiate a new server</p>
+</div><h3 id='tymethod.change_prices' class='method stab '><span id='change_prices.v' class='invisible'><code>fn <a href='#tymethod.change_prices' class='fnname'>change_prices</a>(&amp;mut self, prices: &amp;Self::<a class='trait' href='../../proj_billing/billing/trait.BillingProtocol.html' title='proj_billing::billing::BillingProtocol'>Prices</a>)</code></span></h3><div class='docblock'><p>Change the way bills are calculated. This is a message sent from the server (utility company) to the meter.</p>
+</div><h3 id='tymethod.new_meter' class='method stab '><span id='new_meter.v' class='invisible'><code>fn <a href='#tymethod.new_meter' class='fnname'>new_meter</a>(channel: T, prices: &amp;Self::<a class='trait' href='../../proj_billing/billing/trait.BillingProtocol.html' title='proj_billing::billing::BillingProtocol'>Prices</a>, keys: <a class='struct' href='../../proj_billing/billing/struct.Keys.html' title='proj_billing::billing::Keys'>Keys</a>) -&gt; Self</code></span></h3><div class='docblock'><p>Instantiate a new meter</p>
+</div><h3 id='tymethod.new_server' class='method stab '><span id='new_server.v' class='invisible'><code>fn <a href='#tymethod.new_server' class='fnname'>new_server</a>(channel: T, keys: <a class='struct' href='../../proj_billing/billing/struct.Keys.html' title='proj_billing::billing::Keys'>Keys</a>) -&gt; Self</code></span></h3><div class='docblock'><p>Instantiate a new server</p>
 </div></div>
         <h2 id='implementors'>Implementors</h2>
         <ul class='item-list' id='implementors-list'>
@@ -141,11 +141,9 @@ This will block until it has received the billing information from the meter (vi
     <script>
         window.rootPath = "../../";
         window.currentCrate = "proj_billing";
-        window.playgroundUrl = "";
     </script>
     <script src="../../jquery.js"></script>
     <script src="../../main.js"></script>
-    
     <script defer src="../../search-index.js"></script>
 </body>
 </html>
