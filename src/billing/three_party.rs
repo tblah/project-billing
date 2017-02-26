@@ -219,14 +219,15 @@ impl<P: Read + Write, M: Read + Write> CustomerState<P, M> {
 
     pub fn send_billing_information(&mut self) {
         // calculate what we think that the bill will be and what we expect a to be
-        /*let mut bill = 0.0 as f64;
+        let mut bill = 0 as i64;
         let mut a = Mpz::zero();
 
         for row in &self.consumption_table {
-            bill += row.cons * self.prices[row.other as usize] as f64;
-            a = (a + row.a * self.prices[row.other as usize]).modulus(&self.params.0);
-        }*/
+            bill += row.cons as i64 * self.prices[row.other as usize] as i64;
+            a = (a + row.a.clone() * self.prices[row.other as usize] as i64).modulus(&self.params.0);
+        }
 
+        // todo: send these plus all signed commitments to the provider
     }
     
     /// check for new consumption messages from the meter
