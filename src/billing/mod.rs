@@ -154,6 +154,8 @@ pub trait BillingProtocol<T: Read + Write> {
 
 pub mod sign_on_meter;
 pub mod consumption;
+pub mod three_party;
+mod common;
 
 #[cfg(test)]
 mod tests {
@@ -258,7 +260,7 @@ mod tests {
         ret
     }
 
-    fn random_hour_of_week() -> u8 {
+    pub fn random_hour_of_week() -> u8 {
         let mut ret: u8;
 
         loop {
@@ -272,7 +274,7 @@ mod tests {
         ret
     }
 
-    fn random_positive_f32() -> f32 {
+    pub fn random_positive_f32() -> f32 {
         let mut ret: f32;
 
         loop {
