@@ -16,7 +16,8 @@
     along with project-billing.  If not, see http://www.gnu.org/licenses/.*/
 
 use super::BillingProtocol;
-use super::consumption::*;
+use super::consumption::floating_consumption::*;
+use super::consumption::Consumption;
 use super::common;
 use std::io::{Read, Write, ErrorKind};
 use proj_crypto::asymmetric::sign;
@@ -46,7 +47,7 @@ pub struct SignOnMeter<T: Read + Write> {
 }
 
 impl<T: Read + Write> BillingProtocol<T> for SignOnMeter<T> {
-    type Consumption = Consumption;
+    type Consumption = FloatingConsumption;
     type Prices = Prices;
 
     fn null_prices() -> Self::Prices {
@@ -58,7 +59,7 @@ impl<T: Read + Write> BillingProtocol<T> for SignOnMeter<T> {
         assert!(consumption.is_valid());
 
         // check for new prices information
-        if let Some(new_prices) = common::check_for_new_prices(&mut self.channel, &self.keys.their_pk) {
+        if let Some(new_prices) = common::check_for_new_prices::<T, f32, FloatingConsumption>(&mut self.channel, &self.keys.their_pk) {
             self.prices = new_prices;
         }
 
@@ -127,7 +128,7 @@ impl<T: Read + Write> BillingProtocol<T> for SignOnMeter<T> {
     fn change_prices(&mut self, prices: &Self::Prices) {
         assert!(self.role == Role::Server);
 
-        common::change_prices(&mut self.channel, &self.keys.my_sk, prices);
+        common::change_prices::<T, f32, FloatingConsumption>(&mut self.channel, &self.keys.my_sk, prices);
     }
 
     fn new_meter(channel: T, prices: &Prices, keys: super::Keys) -> SignOnMeter<T> {

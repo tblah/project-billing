@@ -21,7 +21,8 @@
     along with project-billing.  If not, see http://www.gnu.org/licenses/.*/
 
 use super::BillingProtocol;
-use super::consumption::*;
+use super::consumption::integer_consumption::*;
+use super::consumption::Consumption;
 use super::common;
 use std::io::{Read, Write};
 use proj_crypto::asymmetric::{sign, commitments};
@@ -88,10 +89,10 @@ fn read_up_to_newline<R: Read>(source: &mut io::Bytes<R>) -> Vec<u8> {
 }
 
 // separate function so I can test it more easily
-fn meter_consume<W: Write>(params: &commitments::DHParams, sk: &sign::SecretKey, channel: &mut W, consumption: &Consumption) {
+fn meter_consume<W: Write>(params: &commitments::DHParams, sk: &sign::SecretKey, channel: &mut W, consumption: &IntegerConsumption) {
     assert!(consumption.is_valid());
 
-    let cons_int = unsafe {transmute::<f32, u32>(consumption.units_consumed)};
+    let cons_int = consumption.units_consumed;
 
     let a = commitments::random_a(&params.1);
     let a_str = a.to_str_radix(16);
@@ -140,12 +141,10 @@ fn customer_read_consumption<R: Read>(channel: &mut R, meter_key: &sign::PublicK
     let a_str = touple_iter.next().unwrap();
     assert_eq!(None, touple_iter.next());
 
-    let cons_int = u32::from_str_radix(&cons_str, 10).unwrap();
+    let cons = i32::from_str_radix(&cons_str, 10).unwrap();
     let other = u8::from_str_radix(&other_str, 10).unwrap();
     let commit = Mpz::from_str_radix(&commit_str, 16).unwrap();
     let a = Mpz::from_str_radix(&a_str, 16).unwrap();
-
-    let cons = unsafe{ transmute::<u32, f32>(cons_int) };
 
     let table_row = ConsumptionTableRow {
         signed_commitment: signed_commitment,
@@ -170,14 +169,14 @@ impl<T: Read + Write> MeterState<T> {
     }
 
     /// Called once every hour with the consumption incurred in that hour
-    pub fn consume(&mut self, consumption: &Consumption) {
+    pub fn consume(&mut self, consumption: &IntegerConsumption) {
         meter_consume(&self.params, &self.keys.my_sk, &mut self.channel, consumption);
     }
 }
 
 struct ConsumptionTableRow {
     signed_commitment: Vec<u8>,
-    cons: f32,
+    cons: i32,
     other: u8,
     commit: Mpz,
     a: Mpz,
@@ -217,6 +216,18 @@ impl<P: Read + Write, M: Read + Write> CustomerState<P, M> {
             params: params,
         }
     }
+
+    pub fn send_billing_information(&mut self) {
+        // calculate what we think that the bill will be and what we expect a to be
+        /*let mut bill = 0.0 as f64;
+        let mut a = Mpz::zero();
+
+        for row in &self.consumption_table {
+            bill += row.cons * self.prices[row.other as usize] as f64;
+            a = (a + row.a * self.prices[row.other as usize]).modulus(&self.params.0);
+        }*/
+
+    }
     
     /// check for new consumption messages from the meter
     pub fn read_meter_messages(&mut self) {
@@ -226,7 +237,7 @@ impl<P: Read + Write, M: Read + Write> CustomerState<P, M> {
     /// check for price changes from the provider
     pub fn read_provider_messages(&mut self) {
         // check for new prices information
-        if let Some(new_prices) = common::check_for_new_prices(&mut self.provider_channel, &self.provider_key) {
+        if let Some(new_prices) = common::check_for_new_prices::<P, i32, IntegerConsumption>(&mut self.provider_channel, &self.provider_key) {
             self.prices = new_prices;
         }
     }
@@ -259,7 +270,7 @@ impl<T: Read + Write> ProviderState<T> {
     /// Store and send the new prices to the customer. Does not check if the prices have actually changed before sending.
     pub fn change_prices(&mut self, prices: &Prices) {
         // send them
-        common::change_prices(&mut self.channel, &self.keys.my_sk, prices);
+        common::change_prices::<T, i32, IntegerConsumption>(&mut self.channel, &self.keys.my_sk, prices);
 
         // store the prices 
         self.prices = *prices;
@@ -269,10 +280,12 @@ impl<T: Read + Write> ProviderState<T> {
 /************************************** Small tests unique to this module ***********************************************/
 #[cfg(test)]
 mod tests {
-    use super::super::tests::{random_positive_f32, random_hour_of_week};
+    use super::super::tests::{random_hour_of_week};
     use sodiumoxide;
+    use super::super::consumption::integer_consumption::*;
     use super::super::consumption::Consumption;
     use proj_crypto::asymmetric::{sign, commitments};
+    use std::mem::transmute;
 
     #[test]
     fn stringify() {
@@ -282,14 +295,23 @@ mod tests {
         assert_eq!(res, test_vec);
     }
 
+    fn random_positive_i32() -> i32 {
+        let bytes = sodiumoxide::randombytes::randombytes(4);
+        let mut fixed_size = [0 as u8; 4];
+        for i in 0..4 {
+            fixed_size[i] = bytes[i];
+        }
+        unsafe { transmute::<[u8; 4], i32>(fixed_size) }
+    }
+
     #[test]
     fn meter_consume_message() {
         sodiumoxide::init();
 
         // random consumption to send
-        let units = random_positive_f32();
+        let units = random_positive_i32();
         let hour = random_hour_of_week();
-        let consumption = Consumption::new(hour, units);
+        let consumption = IntegerConsumption::new(units, hour);
 
         // channel along which to send data
         let mut channel: Vec<u8> = Vec::new();
@@ -312,7 +334,7 @@ mod tests {
 }
 
 /************************ Stuff that is just for the impl of BillingProtocol so that the test works *********************/
-
+/*
 enum Role<P: Read + Write, M: Read + Write> {
     Server(ProviderState<P>),
     Client(MeterState<M>, CustomerState<P, M>),
@@ -324,8 +346,8 @@ pub struct ThreeParty<T: Read + Write> {
     role: Role<T, UnixStream>,
 }
 
-/*impl<T: Read + Write> BillingProtocol<T> for ThreeParty<T> {
-    type Consumption = Consumption;
+impl<T: Read + Write> BillingProtocol<T> for ThreeParty<T> {
+    type Consumption = IntegerConsumption;
     type Prices = Prices;
 
     fn null_prices() -> Self::Prices {

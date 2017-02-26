@@ -1,4 +1,4 @@
-//! Consumption
+//! Floating Consumption
 //!
 //! Billing Protocol allows protocols to define their own pricing strategy. This module implements an example pricing strategy: hourly time of use billing.
 //!
@@ -15,21 +15,26 @@
     You should have received a copy of the GNU General Public License
     along with project-billing.  If not, see http://www.gnu.org/licenses/.*/
 
-/// Co-efficient for the number of consumption units for each hour of each day of the week
+use super::Consumption;
+use std::mem::{transmute, transmute_copy};
+
+/// co-efficient for the number of consumption units for each hour of each day of the week
 pub type Prices = [f32; 24*7];
 
 /// Consumption information for hourly time of use billing
 #[derive(Debug)]
-pub struct Consumption {
+pub struct FloatingConsumption {
     /// The hour in the week: e.g. 7am on a Tuesday would be 24+7 hours.
     pub hour_of_week: u8,
     /// The number of units of the utility which were consumed in the last hour
     pub units_consumed: f32,
 }
 
-impl Consumption {
+impl Consumption<f32, u8> for FloatingConsumption {
+    type Prices = Prices;
+    
     /// Checks that the values stored in a Consumption object are legal
-    pub fn is_valid(&self) -> bool {
+    fn is_valid(&self) -> bool {
         if self.hour_of_week > ((24 * 7) - 1) {
             return false;
         }
@@ -42,14 +47,49 @@ impl Consumption {
     }
 
     /// Instance new consumption
-    pub fn new(hour_of_week: u8, units_consumed: f32) -> Consumption {
-        let ret = Consumption {
-            hour_of_week: hour_of_week,
-            units_consumed: units_consumed,
+    fn new(cons: f32, other: u8) -> FloatingConsumption {
+        let ret = FloatingConsumption {
+            hour_of_week: other,
+            units_consumed: cons,
         };
 
         assert!(ret.is_valid());
 
         ret
+    }
+
+    fn null_prices() -> Prices { [0.0; 24*7] }
+
+    fn set_price(prices: &mut Prices, other: u8, price: f32) { prices[other as usize] = price }
+
+    fn get_price(prices: &Prices, other: u8) -> f32 { prices[other as usize] }
+
+    fn prices_len() -> usize {24*7}
+
+    fn cons_from_bytes(bytes: &[u8]) -> f32 {
+        assert!(bytes.len() == 4);
+        let mut fixed_size = [0 as u8; 4];
+
+        for i in 0..4 {
+            fixed_size[i] = bytes[i];
+        }
+
+        unsafe { transmute::<[u8; 4], f32>(fixed_size) }
+    }
+
+    fn prices_from_bytes(bytes: &[u8]) -> Prices {
+        assert!(bytes.len() == 24*7*4);
+        let mut fixed_size = [0 as u8; 24*7*4];
+
+        for i in 0..(24*7*4) {
+            fixed_size[i] = bytes[i];
+        }
+
+        unsafe { transmute::<[u8; 24*7*4], Prices>(fixed_size) }
+    }
+
+    fn prices_to_bytes(prices: &Prices) -> Vec<u8> {
+        let array = unsafe { transmute_copy::<Prices, [u8; 24*7*4]>(prices) };
+        Vec::from(array.as_ref())
     }
 }

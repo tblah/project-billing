@@ -12,12 +12,12 @@
     You should have received a copy of the GNU General Public License
     along with project-billing.  If not, see http://www.gnu.org/licenses/.*/
 
-use std::mem::transmute;
 use proj_crypto::asymmetric::sign;
 use std::io::{Read, Write, ErrorKind};
-use super::consumption::*;
+use super::consumption::Consumption;
 
-pub fn check_for_new_prices<T: Read + Write>(channel: &mut T, their_pk: &sign::PublicKey) -> Option<Prices> {
+// only works for 4-byte wide Cons (see the transmute)
+pub fn check_for_new_prices<T: Read + Write, Cons: Sized, C: Consumption<Cons, u8>>(channel: &mut T, their_pk: &sign::PublicKey) -> Option<C::Prices> {
     const BUF_LEN: usize = 4 * 7 * 24 + sign::SIGNATUREBYTES; // size_of apparently doesn't do constants
     let mut buf: [u8; BUF_LEN] = [0; BUF_LEN];
     let mut ret = None;
@@ -36,9 +36,9 @@ pub fn check_for_new_prices<T: Read + Write>(channel: &mut T, their_pk: &sign::P
             Err(_) => { panic!("Verification of new pricing strategy failed") },
         };
 
-        let mut new_prices: Prices = [0.0; 24*7];
+        let mut new_prices: C::Prices = C::null_prices();
 
-        for i in 0..new_prices.len() {
+        for i in 0..C::prices_len() {
             let buf_i = i * 4;
             let mut these_bytes = [0; 4];
 
@@ -46,13 +46,8 @@ pub fn check_for_new_prices<T: Read + Write>(channel: &mut T, their_pk: &sign::P
                 these_bytes[i] = data_buf[buf_i + i]
             }
 
-            new_prices[i] = unsafe {
-                transmute::<[u8; 4], f32>(these_bytes)
-            };
-
-            if new_prices[i] < 0.0 {
-                panic!("Invalid price is less than 0");
-            }
+            let new_price = C::cons_from_bytes(&these_bytes);
+            C::set_price(&mut new_prices, i as u8, new_price);
         }
 
         ret = Some(new_prices);
@@ -61,10 +56,8 @@ pub fn check_for_new_prices<T: Read + Write>(channel: &mut T, their_pk: &sign::P
     ret
 }
 
-pub fn change_prices<T: Read + Write>(channel: &mut T, sk: &sign::SecretKey, prices: &Prices) {
-    let buf = unsafe {
-        transmute::<Prices, [u8; 4*24*7]>(*prices)
-    };
+pub fn change_prices<T: Read + Write, Cons, C: Consumption<Cons, u8>>(channel: &mut T, sk: &sign::SecretKey, prices: &C::Prices) {
+    let buf = C::prices_to_bytes(prices);
 
     let sbuf = sign::sign(&buf, sk);
 

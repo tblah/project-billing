@@ -21,6 +21,7 @@
 //! use proj_billing::billing;
 //! use proj_billing::billing::sign_on_meter::SignOnMeter;
 //! use proj_billing::billing::BillingProtocol;
+//! use proj_billing::billing::consumption::Consumption;
 //! use std::thread;
 //! use std::collections::HashMap;
 //! use std::time::Duration;
@@ -79,7 +80,7 @@
 //!     pks.insert(key_id::id_of_pk(&s_keypair.0), s_keypair.0.clone());
 //!     let pks_server = pks.clone();
 //!
-//!     let consumption = <SignOnMeter<Client> as BillingProtocol<Client>>::Consumption::new(0, 1.0);
+//!     let consumption = <SignOnMeter<Client> as BillingProtocol<Client>>::Consumption::new(1.0, 0);
 //!
 //!     let prices = [1.0; 24*7];
 //!
@@ -161,6 +162,7 @@ mod common;
 mod tests {
     use super::sign_on_meter::SignOnMeter;
     use super::BillingProtocol;
+    use super::consumption::Consumption;
     use sodiumoxide;
     use sodiumoxide::randombytes;
     use proj_crypto::asymmetric::sign;
@@ -306,7 +308,7 @@ mod tests {
             let units = random_positive_f32();
             let hour = random_hour_of_week();
 
-            let cons = <SignOnMeter<UnixStream> as BillingProtocol<UnixStream>>::Consumption::new(hour, units);
+            let cons = <SignOnMeter<UnixStream> as BillingProtocol<UnixStream>>::Consumption::new(units, hour);
             consumption.push_back(cons);
 
             expected_bill += prices[hour as usize] as f64 * units as f64;
