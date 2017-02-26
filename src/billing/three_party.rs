@@ -31,6 +31,22 @@ use std::os::unix::net::*;
 use std::mem::transmute;
 use gmp::mpz::Mpz;
 use std::io;
+use std::path::Path;
+
+/// The default file to store diffie-hellman parameters in
+pub static DEFAULT_PARAMS_PATH: &'static str = "dhparams.txt";
+
+/// Try to read DHParams from the provided file. If this fails, then generate new parameters and write these to the file
+pub fn read_or_gen_params<P: AsRef<Path> + Clone>(path: P) -> commitments::DHParams {
+    match commitments::read_dhparams(path.clone()) {
+        Ok(params) => params,
+        Err(e) => {
+            let params = commitments::gen_dh_params().unwrap();
+            let _ = commitments::write_dhparams(&params, path);
+            params
+        }
+    }
+}
 
 /// State associated with the smart meter
 pub struct MeterState<T: Read + Write> {
@@ -278,7 +294,7 @@ mod tests {
         // channel along which to send data
         let mut channel: Vec<u8> = Vec::new();
 
-        let params = commitments::gen_dh_params().unwrap();
+        let params = super::read_or_gen_params(super::DEFAULT_PARAMS_PATH);
         let (pk, sk) = sign::gen_keypair();
         let mut table = Vec::new();
 
