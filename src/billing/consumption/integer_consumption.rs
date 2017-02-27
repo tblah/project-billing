@@ -36,10 +36,12 @@ impl Consumption<i32, u8> for IntegerConsumption {
     /// Checks that the values stored in a Consumption object are legal
     fn is_valid(&self) -> bool {
         if self.hour_of_week > ((24 * 7) - 1) {
+            println!("Invalid consumption: Hour of week");
             return false;
         }
 
         if self.units_consumed < 0 {
+            println!("invalid consumption: cons = {}", self.units_consumed);
             return false;
         }
 

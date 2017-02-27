@@ -46,7 +46,7 @@ pub struct SignOnMeter<T: Read + Write> {
     keys: super::Keys,
 }
 
-impl<T: Read + Write> BillingProtocol<T> for SignOnMeter<T> {
+impl<T: Read + Write> BillingProtocol<T, f64> for SignOnMeter<T> {
     type Consumption = FloatingConsumption;
     type Prices = Prices;
 

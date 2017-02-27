@@ -41,7 +41,7 @@ pub static DEFAULT_PARAMS_PATH: &'static str = "dhparams.txt";
 pub fn read_or_gen_params<P: AsRef<Path> + Clone>(path: P) -> commitments::DHParams {
     match commitments::read_dhparams(path.clone()) {
         Ok(params) => params,
-        Err(e) => {
+        Err(_) => {
             let params = commitments::gen_dh_params().unwrap();
             let _ = commitments::write_dhparams(&params, path);
             params
@@ -101,10 +101,11 @@ fn meter_consume<W: Write>(params: &commitments::DHParams, sk: &sign::SecretKey,
     let commitment = commit_context.to_commitment();
     let commitment_str = commitment.x.to_str_radix(16);
 
-    // send (cons, other, a) + sign(commit)
+    // send (cons, a) + sign(commit, other)
 
-    let touple_str = format!("{} {} {}", cons_int, consumption.hour_of_week, a_str);
-    let signed_commitment = sign::sign(&commitment_str.as_bytes(), &sk);
+    let touple_str = format!("{} {}", cons_int, a_str);
+    let thing_to_sign = format!("{} {}", commitment_str, consumption.hour_of_week);
+    let signed_commitment = sign::sign(&thing_to_sign.as_bytes(), &sk);
 
     let message_str = touple_str + "\n" + &stringify_bytes(&signed_commitment) + "\n";
     let message = message_str.as_bytes();
@@ -126,18 +127,19 @@ fn customer_read_consumption<R: Read>(channel: &mut R, meter_key: &sign::PublicK
 
     // read the signed commitment
     let signed_commitment_str_bytes = read_up_to_newline(&mut iterator);
-
-    // unstringify the signed commitment
-    let signed_commitment = unstringify_bytes(&String::from_utf8(signed_commitment_str_bytes).unwrap());
+    let signed_commitment_other = unstringify_bytes(&String::from_utf8(signed_commitment_str_bytes.clone()).unwrap());
 
     // verify the signature on the commitment
-    let commitment_bytes = sign::verify(&signed_commitment, meter_key).unwrap();
-    let commit_str = String::from_utf8(commitment_bytes).unwrap();
+    let commitment_other_bytes = sign::verify(&signed_commitment_other, meter_key).unwrap();
+    let commit_other_str = String::from_utf8(commitment_other_bytes).unwrap();
+    let mut commit_other_iter = commit_other_str.split_whitespace();
+    let commit_str = commit_other_iter.next().unwrap();
+    let other_str = commit_other_iter.next().unwrap();
+    assert_eq!(None, commit_other_iter.next());
 
-    // touple looks like "cons other a"
+    // touple looks like "cons a"
     let mut touple_iter = touple_str.split_whitespace();
     let cons_str = touple_iter.next().unwrap();
-    let other_str = touple_iter.next().unwrap();
     let a_str = touple_iter.next().unwrap();
     assert_eq!(None, touple_iter.next());
 
@@ -147,10 +149,9 @@ fn customer_read_consumption<R: Read>(channel: &mut R, meter_key: &sign::PublicK
     let a = Mpz::from_str_radix(&a_str, 16).unwrap();
 
     let table_row = ConsumptionTableRow {
-        signed_commitment: signed_commitment,
+        signed_commitment: String::from_utf8(signed_commitment_str_bytes).unwrap(),
         cons: cons,
         other: other,
-        commit: commit,
         a: a,
     };
         
@@ -175,10 +176,9 @@ impl<T: Read + Write> MeterState<T> {
 }
 
 struct ConsumptionTableRow {
-    signed_commitment: Vec<u8>,
+    signed_commitment: String,
     cons: i32,
     other: u8,
-    commit: Mpz,
     a: Mpz,
 }
 
@@ -217,6 +217,7 @@ impl<P: Read + Write, M: Read + Write> CustomerState<P, M> {
         }
     }
 
+    /// Calculate the bill and send it to the provider
     pub fn send_billing_information(&mut self) {
         // calculate what we think that the bill will be and what we expect a to be
         let mut bill = 0 as i64;
@@ -227,7 +228,27 @@ impl<P: Read + Write, M: Read + Write> CustomerState<P, M> {
             a = (a + row.a.clone() * self.prices[row.other as usize] as i64).modulus(&self.params.0);
         }
 
-        // todo: send these plus all signed commitments to the provider
+        // Message format: "bill\na\ntable.len()\ntable[0]\n...\n\table[N]\n"
+
+        let const_len_part_str = format!("{}\n{}\n{}\n", bill, a.to_str_radix(16), self.consumption_table.len());
+        let const_len_part = const_len_part_str.as_bytes();
+        match self.provider_channel.write(&const_len_part) {
+            Ok(s) => assert_eq!(s, const_len_part.len()),
+            Err(e) => panic!("Failed to send the constant part of the billing info. The error was {}", e),
+        };
+
+        // send the contents of the table
+        for row in &self.consumption_table {
+            let string = format!("{}\n", row.signed_commitment);
+            let bytes = string.as_bytes();
+            match self.provider_channel.write(&bytes) {
+                Ok(s) => assert_eq!(s, bytes.len()),
+                Err(e) => panic!("Failed to send a signed_commitment to the provider. The error was {}", e),
+            };
+        }
+
+        // empty the table
+        self.consumption_table.clear();
     }
     
     /// check for new consumption messages from the meter
@@ -254,6 +275,8 @@ pub struct ProviderState<T: Read + Write> {
     keys: super::Keys,
     /// Commitment parameters
     params: commitments::DHParams,
+    /// Bill total
+    bill_total: i64,
 }
 
 impl<T: Read + Write> ProviderState<T> {
@@ -265,7 +288,70 @@ impl<T: Read + Write> ProviderState<T> {
             prices: prices,
             keys: keys,
             params: params,
+            bill_total: 0,
         }
+    }
+
+    /// for implementing BillingProtocol
+    pub fn pay_bill(&mut self) -> i64 {
+        let ret = self.bill_total;
+        self.bill_total = 0;
+        ret
+    }
+
+    /// receive new billing information
+    pub fn receive_billing_information(&mut self) {
+        let mut iterator = Read::by_ref(&mut self.channel).bytes();
+
+        // get the fixed-length part
+        let bill_bytes = read_up_to_newline(&mut iterator);
+        let a_bytes = read_up_to_newline(&mut iterator);
+        let length_bytes = read_up_to_newline(&mut iterator);
+
+        let bill = i64::from_str_radix(&String::from_utf8(bill_bytes).unwrap(), 10).unwrap();
+        let a = Mpz::from_str_radix(&String::from_utf8(a_bytes).unwrap(), 16).unwrap();
+        let length = usize::from_str_radix(&String::from_utf8(length_bytes).unwrap(), 10).unwrap();
+
+        // get all of the signed commitments
+        let mut commitments = Vec::new();
+        let mut others = Vec::new();
+
+        if length == 0 {
+            assert_eq!(bill, 0);
+            return;
+        }
+
+        for i in 0..length {
+            let signed_commitment_bytes = read_up_to_newline(&mut iterator);
+            let signed_commitment = unstringify_bytes(&String::from_utf8(signed_commitment_bytes).unwrap());
+            let commitment_bytes = sign::verify(&signed_commitment, &self.keys.their_pk).unwrap();
+            let commit_other_str = String::from_utf8(commitment_bytes).unwrap();
+
+            let mut commit_other_iter = commit_other_str.split_whitespace();
+            let commit_str = commit_other_iter.next().unwrap();
+            let other_str = commit_other_iter.next().unwrap();
+            assert_eq!(None, commit_other_iter.next());
+            
+            let commitment = Mpz::from_str_radix(&commit_str, 16).unwrap();
+            commitments.push(commitments::Commitment::from_parts(self.params.0.clone(), commitment).unwrap());
+
+            let other = usize::from_str_radix(&other_str, 10).unwrap();
+            others.push(other);
+        }
+
+        // check the bill
+        let expected_commit = commitments::CommitmentContext::from_opening(
+            (Mpz::from(bill), a), self.params.clone()).unwrap().to_commitment();
+
+        let mut calculated_commit = commitments[0].clone() * Mpz::from(self.prices[others[0]]);
+        for i in 1..length {
+            calculated_commit = calculated_commit + (commitments[i].clone() * Mpz::from(self.prices[others[i]]));
+        }
+
+        assert!(expected_commit == calculated_commit);
+
+        // it worked so trust it
+        self.bill_total += bill;
     }
     
     /// Store and send the new prices to the customer. Does not check if the prices have actually changed before sending.
@@ -302,7 +388,8 @@ mod tests {
         for i in 0..4 {
             fixed_size[i] = bytes[i];
         }
-        unsafe { transmute::<[u8; 4], i32>(fixed_size) }
+        let r = unsafe { transmute::<[u8; 4], i32>(fixed_size) };
+        if r > 0 { r } else { random_positive_i32() }
     }
 
     #[test]
@@ -311,6 +398,7 @@ mod tests {
 
         // random consumption to send
         let units = random_positive_i32();
+        println!("Testing cons is {}", units);
         let hour = random_hour_of_week();
         let consumption = IntegerConsumption::new(units, hour);
 

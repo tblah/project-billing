@@ -28,7 +28,7 @@
 //! 
 //! 
 //! fn server_thread(sign_keys: billing::Keys, exchange_keypair: Keypair, pks: HashMap<key_id::PublicKeyId, PublicKey>,
-//!                  prices: <SignOnMeter<Server> as BillingProtocol<Server>>::Prices, socket: &str) -> f64 {
+//!                  prices: <SignOnMeter<Server> as BillingProtocol<Server, f64>>::Prices, socket: &str) -> f64 {
 //!     let mut listener = server::listen(socket).unwrap();
 //!     let mut stream = server::do_key_exchange(listener.incoming().next().unwrap(), &exchange_keypair, &pks).unwrap();
 //!
@@ -40,13 +40,13 @@
 //! }
 //!
 //! fn meter_thread(keys: billing::Keys, exchange_keypair: Keypair, pks: HashMap<key_id::PublicKeyId, PublicKey>,
-//!                 cons: <SignOnMeter<Client> as BillingProtocol<Client>>::Consumption, socket: &str) {
+//!                 cons: <SignOnMeter<Client> as BillingProtocol<Client, f64>>::Consumption, socket: &str) {
 //!     thread::sleep(Duration::from_millis(20)); // wait for the server to start
 //!
 //!     let mut stream = client::start(socket, exchange_keypair, &pks).unwrap();
 //!     stream.blocking_off(5);
 //!
-//!     let ref prices = &<SignOnMeter<Client> as BillingProtocol<Client>>::null_prices();
+//!     let ref prices = &<SignOnMeter<Client> as BillingProtocol<Client, f64>>::null_prices();
 //!
 //!     let mut meter = SignOnMeter::new_meter(stream, prices, keys);
 //!
@@ -80,7 +80,7 @@
 //!     pks.insert(key_id::id_of_pk(&s_keypair.0), s_keypair.0.clone());
 //!     let pks_server = pks.clone();
 //!
-//!     let consumption = <SignOnMeter<Client> as BillingProtocol<Client>>::Consumption::new(1.0, 0);
+//!     let consumption = <SignOnMeter<Client> as BillingProtocol<Client, f64>>::Consumption::new(1.0, 0);
 //!
 //!     let prices = [1.0; 24*7];
 //!
@@ -122,7 +122,7 @@ pub struct Keys {
 ///
 /// The first type argument it the channel over which communication occurs. This should probably be a proj_net::{Server, Client}.
 /// The second type argument is the return value of the constructors (i.e the structure implementing this trait)
-pub trait BillingProtocol<T: Read + Write> {
+pub trait BillingProtocol<T: Read + Write, B> {
     /// Consumption information for billing e.g. the time of consumption and the units consumed
     type Consumption;
 
@@ -141,7 +141,7 @@ pub trait BillingProtocol<T: Read + Write> {
 
     /// Pay bill (run on the server)
     /// This will block until it has received the billing information from the meter (via send_billing_information)
-    fn pay_bill(&mut self) -> f64;
+    fn pay_bill(&mut self) -> B;
 
     /// Change the way bills are calculated. This is a message sent from the server (utility company) to the meter.
     fn change_prices(&mut self, prices: &Self::Prices);
@@ -188,7 +188,7 @@ mod tests {
         unsafe { mem::transmute::<[u8; 4], f32>(array) }
     }
 
-    fn server_thread<T: BillingProtocol<UnixStream>, P: AsRef<Path>>(keys: super::Keys, prices: T::Prices, path: P) -> f64 {
+    fn server_thread<B, T: BillingProtocol<UnixStream, B>, P: AsRef<Path>>(keys: super::Keys, prices: T::Prices, path: P) -> B {
         let listener = UnixListener::bind(path).unwrap();
         let (stream, _) = listener.accept().unwrap(); // wait for a connection from the client
 
@@ -199,7 +199,7 @@ mod tests {
         server.pay_bill()
     }
 
-    fn meter_thread<T: BillingProtocol<UnixStream>, P: AsRef<Path> +  Clone>(keys: super::Keys, consumption: LinkedList<T::Consumption>, path: P) {
+    fn meter_thread<B, T: BillingProtocol<UnixStream, B>, P: AsRef<Path> +  Clone>(keys: super::Keys, consumption: LinkedList<T::Consumption>, path: P) {
         let mut remaining_tries = 10;
         let mut stream_option = None;
 
@@ -232,10 +232,10 @@ mod tests {
         meter.send_billing_information();
     }
 
-    fn test_billing_protocol<T: 'static, P: 'static>(prices: T::Prices, consumption: LinkedList<T::Consumption>, socket_path: P) -> f64
-        where T: BillingProtocol<UnixStream> + Send, <T as BillingProtocol<UnixStream>>::Prices: Sync,
-        <T as BillingProtocol<UnixStream>>::Consumption: Sync, <T as BillingProtocol<UnixStream>>::Consumption: Send,
-        <T as BillingProtocol<UnixStream>>::Prices: Send, P: AsRef<Path> + Send + Clone + Sync
+    fn test_billing_protocol<T: 'static, P: 'static, B: 'static>(prices: T::Prices, consumption: LinkedList<T::Consumption>, socket_path: P) -> B 
+        where T: BillingProtocol<UnixStream, B> + Send, <T as BillingProtocol<UnixStream, B>>::Prices: Sync,
+        <T as BillingProtocol<UnixStream, B>>::Consumption: Sync, <T as BillingProtocol<UnixStream, B>>::Consumption: Send,
+        <T as BillingProtocol<UnixStream, B>>::Prices: Send, P: AsRef<Path> + Send + Clone + Sync, B: Send
     {let (m_pk, m_sk) = sign::gen_keypair(); let (s_pk, s_sk) = sign::gen_keypair();
         
         let m_keys = super::Keys {
@@ -250,8 +250,8 @@ mod tests {
 
         let socket_path_clone = socket_path.clone();
         let socket_path_clone2 = socket_path.clone();
-        let server_thread = thread::spawn(|| -> f64 {server_thread::<T, P>(s_keys, prices, socket_path_clone)}); // start server
-        let meter_thread = thread::spawn(|| {meter_thread::<T, P>(m_keys, consumption, socket_path_clone2);}); // start meter
+        let server_thread = thread::spawn(|| -> B {server_thread::<B, T, P>(s_keys, prices, socket_path_clone)}); // start server
+        let meter_thread = thread::spawn(|| {meter_thread::<B, T, P>(m_keys, consumption, socket_path_clone2);}); // start meter
 
         let ret = server_thread.join().unwrap();
         let _ = meter_thread.join().unwrap();
@@ -308,7 +308,7 @@ mod tests {
             let units = random_positive_f32();
             let hour = random_hour_of_week();
 
-            let cons = <SignOnMeter<UnixStream> as BillingProtocol<UnixStream>>::Consumption::new(units, hour);
+            let cons = <SignOnMeter<UnixStream> as BillingProtocol<UnixStream, f64>>::Consumption::new(units, hour);
             consumption.push_back(cons);
 
             expected_bill += prices[hour as usize] as f64 * units as f64;
@@ -316,7 +316,7 @@ mod tests {
 
         let socket_path = "./sign_on_meter_test_socket".to_string();
         
-        let res = test_billing_protocol::<SignOnMeter<UnixStream>, String>(prices, consumption, socket_path);
+        let res = test_billing_protocol::<SignOnMeter<UnixStream>, String, f64>(prices, consumption, socket_path);
 
         assert_eq!(res, expected_bill);
     }
