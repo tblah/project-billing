@@ -32,7 +32,7 @@
 //!     let mut listener = server::listen(socket).unwrap();
 //!     let mut stream = server::do_key_exchange(listener.incoming().next().unwrap(), &exchange_keypair, &pks).unwrap();
 //!
-//!     let mut server = SignOnMeter::new_server(stream, sign_keys);
+//!     let mut server = SignOnMeter::new_server(stream, sign_keys, &prices);
 //!     
 //!     server.change_prices(&prices);
 //!
@@ -48,7 +48,7 @@
 //!
 //!     let ref prices = &<SignOnMeter<Client> as BillingProtocol<Client, f64>>::null_prices();
 //!
-//!     let mut meter = SignOnMeter::new_meter(stream, prices, keys);
+//!     let mut meter = SignOnMeter::new_meter(stream, prices, billing::MeterKeys::SignOnMeter(keys));
 //!
 //!     thread::sleep(Duration::from_millis(2)); // give the server chance to send us it's new prices
 //!
@@ -118,6 +118,14 @@ pub struct Keys {
     pub their_pk: sign::PublicKey,
 }
 
+/// Ugly hack to make new_meter have the right parameters
+pub enum MeterKeys {
+    /// Argument it what it says on the tin
+    SignOnMeter(Keys),
+    /// (meter secret key, meter public key, provider public key)
+    ThreeParty(sign::SecretKey, sign::PublicKey, sign::PublicKey),
+}
+
 /// Functionality which all billing protocols must provide.
 ///
 /// The first type argument it the channel over which communication occurs. This should probably be a proj_net::{Server, Client}.
@@ -147,10 +155,10 @@ pub trait BillingProtocol<T: Read + Write, B> {
     fn change_prices(&mut self, prices: &Self::Prices);
 
     /// Instantiate a new meter
-    fn new_meter(channel: T, prices: &Self::Prices, keys: Keys) -> Self;
+    fn new_meter(channel: T, prices: &Self::Prices, keys: MeterKeys) -> Self;
 
     /// Instantiate a new server
-    fn new_server(channel: T, keys: Keys) -> Self;
+    fn new_server(channel: T, keys: Keys, prices: &Self::Prices) -> Self;
 }
 
 pub mod sign_on_meter;
@@ -161,6 +169,7 @@ mod common;
 #[cfg(test)]
 mod tests {
     use super::sign_on_meter::SignOnMeter;
+    use super::three_party::tests::ThreeParty;
     use super::BillingProtocol;
     use super::consumption::Consumption;
     use sodiumoxide;
@@ -192,14 +201,14 @@ mod tests {
         let listener = UnixListener::bind(path).unwrap();
         let (stream, _) = listener.accept().unwrap(); // wait for a connection from the client
 
-        let mut server = T::new_server(stream, keys);
+        let mut server = T::new_server(stream, keys, &prices);
         
         server.change_prices(&prices);
 
         server.pay_bill()
     }
 
-    fn meter_thread<B, T: BillingProtocol<UnixStream, B>, P: AsRef<Path> +  Clone>(keys: super::Keys, consumption: LinkedList<T::Consumption>, path: P) {
+    fn meter_thread<B, T: BillingProtocol<UnixStream, B>, P: AsRef<Path> +  Clone>(keys: super::MeterKeys, consumption: LinkedList<T::Consumption>, path: P) {
         let mut remaining_tries = 10;
         let mut stream_option = None;
 
@@ -232,26 +241,16 @@ mod tests {
         meter.send_billing_information();
     }
 
-    fn test_billing_protocol<T: 'static, P: 'static, B: 'static>(prices: T::Prices, consumption: LinkedList<T::Consumption>, socket_path: P) -> B 
+    fn test_billing_protocol<T: 'static, P: 'static, B: 'static>(prices: T::Prices, consumption: LinkedList<T::Consumption>, socket_path: P, meter_keys: super::MeterKeys, s_keys: super::Keys) -> B 
         where T: BillingProtocol<UnixStream, B> + Send, <T as BillingProtocol<UnixStream, B>>::Prices: Sync,
         <T as BillingProtocol<UnixStream, B>>::Consumption: Sync, <T as BillingProtocol<UnixStream, B>>::Consumption: Send,
         <T as BillingProtocol<UnixStream, B>>::Prices: Send, P: AsRef<Path> + Send + Clone + Sync, B: Send
-    {let (m_pk, m_sk) = sign::gen_keypair(); let (s_pk, s_sk) = sign::gen_keypair();
-        
-        let m_keys = super::Keys {
-            my_sk: m_sk,
-            their_pk: s_pk,
-        };
-
-        let s_keys = super::Keys {
-            my_sk: s_sk,
-            their_pk: m_pk,
-        };
+    {
 
         let socket_path_clone = socket_path.clone();
         let socket_path_clone2 = socket_path.clone();
         let server_thread = thread::spawn(|| -> B {server_thread::<B, T, P>(s_keys, prices, socket_path_clone)}); // start server
-        let meter_thread = thread::spawn(|| {meter_thread::<B, T, P>(m_keys, consumption, socket_path_clone2);}); // start meter
+        let meter_thread = thread::spawn(|| {meter_thread::<B, T, P>(meter_keys, consumption, socket_path_clone2);}); // start meter
 
         let ret = server_thread.join().unwrap();
         let _ = meter_thread.join().unwrap();
@@ -290,6 +289,16 @@ mod tests {
         ret
     }
 
+    pub fn random_positive_i32() -> i32 {
+        let bytes = sodiumoxide::randombytes::randombytes(4);
+        let mut fixed_size = [0 as u8; 4];
+        for i in 0..4 {
+            fixed_size[i] = bytes[i];
+        }
+        let r = unsafe { mem::transmute::<[u8; 4], i32>(fixed_size) };
+        if r > 0 { r } else { random_positive_i32() }
+    }
+
     #[test]
     fn sign_on_meter() {
         sodiumoxide::init();
@@ -315,8 +324,62 @@ mod tests {
         }
 
         let socket_path = "./sign_on_meter_test_socket".to_string();
-        
-        let res = test_billing_protocol::<SignOnMeter<UnixStream>, String, f64>(prices, consumption, socket_path);
+
+        let (m_pk, m_sk) = sign::gen_keypair();
+        let (s_pk, s_sk) = sign::gen_keypair();
+
+        let s_keys = super::Keys {
+            my_sk: s_sk,
+            their_pk: m_pk,
+        };
+       
+        let m_keys = super::Keys {
+            my_sk: m_sk,
+            their_pk: s_pk,
+        };
+
+        let res = test_billing_protocol::<SignOnMeter<UnixStream>, String, f64>(prices, consumption, socket_path, super::MeterKeys::SignOnMeter(m_keys), s_keys);
+
+        assert_eq!(res, expected_bill);
+    }
+
+    #[test]
+    fn three_party() {
+        sodiumoxide::init();
+        let num_cons = randombytes::randombytes(1)[0] >> 5;
+
+        let mut prices = [0 as i32; 24*7];
+
+        for i in 0..(24*7) {
+            prices[i as usize] = random_positive_i32();
+        }
+
+        let mut consumption = LinkedList::new();
+        let mut expected_bill = 0 as i64;
+
+        for _ in 0..num_cons {
+            let units = random_positive_i32() >> 20; // make it smaller so we don't overflow the bill
+            let hour = random_hour_of_week();
+
+            let cons = <ThreeParty<UnixStream> as BillingProtocol<UnixStream, i64>>::Consumption::new(units, hour);
+            consumption.push_back(cons);
+
+            expected_bill += prices[hour as usize] as i64 * units as i64;
+        }
+
+        let socket_path = "./three_party_test_socket".to_string();
+
+        let (m_pk, m_sk) = sign::gen_keypair();
+        let (s_pk, s_sk) = sign::gen_keypair();
+
+        let s_keys = super::Keys {
+            my_sk: s_sk,
+            their_pk: m_pk.clone(),
+        };
+
+        let res = test_billing_protocol::<ThreeParty<UnixStream>, String, i64>(prices, consumption, socket_path,
+                                                                  super::MeterKeys::ThreeParty(m_sk, m_pk, s_pk), s_keys);
+        remove_file("meter_to_customer_test_socket").unwrap();
 
         assert_eq!(res, expected_bill);
     }

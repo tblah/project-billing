@@ -131,7 +131,12 @@ impl<T: Read + Write> BillingProtocol<T, f64> for SignOnMeter<T> {
         common::change_prices::<T, f32, FloatingConsumption>(&mut self.channel, &self.keys.my_sk, prices);
     }
 
-    fn new_meter(channel: T, prices: &Prices, keys: super::Keys) -> SignOnMeter<T> {
+    fn new_meter(channel: T, prices: &Prices, meter_keys: super::MeterKeys) -> SignOnMeter<T> {
+        let keys = match meter_keys {
+            super::MeterKeys::SignOnMeter(k) => k,
+            _ => panic!("Wrong sort of MeterKeys"),
+        };
+        
         SignOnMeter {
             role: Role::Meter,
             channel: channel,
@@ -141,12 +146,16 @@ impl<T: Read + Write> BillingProtocol<T, f64> for SignOnMeter<T> {
         }
     }
 
-    fn new_server(channel: T, keys: super::Keys) -> SignOnMeter<T> {
+    fn new_server(channel: T, keys: super::Keys, prices: &Prices) -> SignOnMeter<T> {
+        let mut prices_clone = [0 as f32; 7*24];
+        for i in 0..(7*24) {
+            prices_clone[i] = prices[i];
+        }
         SignOnMeter {
             role: Role::Server,
             channel: channel,
             running_total: 0.0,
-            prices: [0.0; 7*24],
+            prices: prices_clone,
             keys: keys,
         }
     }

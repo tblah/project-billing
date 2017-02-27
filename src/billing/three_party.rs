@@ -20,16 +20,11 @@
     You should have received a copy of the GNU General Public License
     along with project-billing.  If not, see http://www.gnu.org/licenses/.*/
 
-use super::BillingProtocol;
 use super::consumption::integer_consumption::*;
 use super::consumption::Consumption;
 use super::common;
 use std::io::{Read, Write};
 use proj_crypto::asymmetric::{sign, commitments};
-use std::thread;
-use std::time::Duration;
-use std::os::unix::net::*;
-use std::mem::transmute;
 use gmp::mpz::Mpz;
 use std::io;
 use std::path::Path;
@@ -53,8 +48,8 @@ pub fn read_or_gen_params<P: AsRef<Path> + Clone>(path: P) -> commitments::DHPar
 pub struct MeterState<T: Read + Write> {
     /// Channel through which to communicate with the customer
     channel: T,
-    /// Signing keys
-    keys: super::Keys,
+    /// Signing key
+    sk: sign::SecretKey,
     /// Commitment parameters
     params: commitments::DHParams,
 }
@@ -133,7 +128,7 @@ fn customer_read_consumption<R: Read>(channel: &mut R, meter_key: &sign::PublicK
     let commitment_other_bytes = sign::verify(&signed_commitment_other, meter_key).unwrap();
     let commit_other_str = String::from_utf8(commitment_other_bytes).unwrap();
     let mut commit_other_iter = commit_other_str.split_whitespace();
-    let commit_str = commit_other_iter.next().unwrap();
+    let _ = commit_other_iter.next().unwrap();
     let other_str = commit_other_iter.next().unwrap();
     assert_eq!(None, commit_other_iter.next());
 
@@ -145,7 +140,6 @@ fn customer_read_consumption<R: Read>(channel: &mut R, meter_key: &sign::PublicK
 
     let cons = i32::from_str_radix(&cons_str, 10).unwrap();
     let other = u8::from_str_radix(&other_str, 10).unwrap();
-    let commit = Mpz::from_str_radix(&commit_str, 16).unwrap();
     let a = Mpz::from_str_radix(&a_str, 16).unwrap();
 
     let table_row = ConsumptionTableRow {
@@ -160,18 +154,18 @@ fn customer_read_consumption<R: Read>(channel: &mut R, meter_key: &sign::PublicK
     
 impl<T: Read + Write> MeterState<T> {
     /// Create a new MeterState object
-    pub fn new(channel: T, keys: super::Keys, params: commitments::DHParams) -> MeterState<T> {
-        assert!(commitments::verify_dh_params(&params));
+    pub fn new(channel: T, sk: sign::SecretKey, params: commitments::DHParams) -> MeterState<T> {
+        //assert!(commitments::verify_dh_params(&params));
         MeterState {
             channel: channel,
-            keys: keys,
+            sk: sk,
             params: params
         }
     }
 
     /// Called once every hour with the consumption incurred in that hour
     pub fn consume(&mut self, consumption: &IntegerConsumption) {
-        meter_consume(&self.params, &self.keys.my_sk, &mut self.channel, consumption);
+        meter_consume(&self.params, &self.sk, &mut self.channel, consumption);
     }
 }
 
@@ -205,7 +199,7 @@ impl<P: Read + Write, M: Read + Write> CustomerState<P, M> {
     pub fn new(meter_channel: M, provider_channel: P, prices: Prices, provider_key: sign::PublicKey,
                meter_key: sign::PublicKey, params: commitments::DHParams)
                -> CustomerState<P, M> {
-        assert!(commitments::verify_dh_params(&params));
+        //assert!(commitments::verify_dh_params(&params));
         CustomerState {
             meter_channel: meter_channel,
             provider_channel: provider_channel,
@@ -282,7 +276,7 @@ pub struct ProviderState<T: Read + Write> {
 impl<T: Read + Write> ProviderState<T> {
     /// create a new ProviderState
     pub fn new(channel: T, prices: Prices, keys: super::Keys, params: commitments::DHParams) -> ProviderState<T> {
-        assert!(commitments::verify_dh_params(&params));
+        //assert!(commitments::verify_dh_params(&params));
         ProviderState {
             channel: channel,
             prices: prices,
@@ -321,7 +315,7 @@ impl<T: Read + Write> ProviderState<T> {
             return;
         }
 
-        for i in 0..length {
+        for _ in 0..length {
             let signed_commitment_bytes = read_up_to_newline(&mut iterator);
             let signed_commitment = unstringify_bytes(&String::from_utf8(signed_commitment_bytes).unwrap());
             let commitment_bytes = sign::verify(&signed_commitment, &self.keys.their_pk).unwrap();
@@ -333,7 +327,7 @@ impl<T: Read + Write> ProviderState<T> {
             assert_eq!(None, commit_other_iter.next());
             
             let commitment = Mpz::from_str_radix(&commit_str, 16).unwrap();
-            commitments.push(commitments::Commitment::from_parts(self.params.0.clone(), commitment).unwrap());
+            commitments.push(commitments::Commitment::from_parts(commitment, self.params.0.clone(), false).unwrap());
 
             let other = usize::from_str_radix(&other_str, 10).unwrap();
             others.push(other);
@@ -366,30 +360,24 @@ impl<T: Read + Write> ProviderState<T> {
 
 /************************************** Small tests unique to this module ***********************************************/
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use super::super::tests::{random_hour_of_week};
     use sodiumoxide;
     use super::super::consumption::integer_consumption::*;
     use super::super::consumption::Consumption;
-    use proj_crypto::asymmetric::{sign, commitments};
-    use std::mem::transmute;
+    use proj_crypto::asymmetric::sign;
+    use std::thread;
+    use std::time::Duration;
+    use std::os::unix::net::*;
+    use super::super::BillingProtocol;
+    use super::*;
 
     #[test]
     fn stringify() {
         let test_vec = vec!(0 as u8, 6, 213, 47, 8, 61, 2, 31, 2, 49, 0, 8, 71, 58, 96, 5);
-        let string = super::stringify_bytes(&test_vec);
-        let res = super::unstringify_bytes(&string);
+        let string = stringify_bytes(&test_vec);
+        let res = unstringify_bytes(&string);
         assert_eq!(res, test_vec);
-    }
-
-    fn random_positive_i32() -> i32 {
-        let bytes = sodiumoxide::randombytes::randombytes(4);
-        let mut fixed_size = [0 as u8; 4];
-        for i in 0..4 {
-            fixed_size[i] = bytes[i];
-        }
-        let r = unsafe { transmute::<[u8; 4], i32>(fixed_size) };
-        if r > 0 { r } else { random_positive_i32() }
     }
 
     #[test]
@@ -397,55 +385,163 @@ mod tests {
         sodiumoxide::init();
 
         // random consumption to send
-        let units = random_positive_i32();
-        println!("Testing cons is {}", units);
+        let units = super::super::tests::random_positive_i32();
+        //println!("Testing cons is {}", units);
         let hour = random_hour_of_week();
         let consumption = IntegerConsumption::new(units, hour);
 
         // channel along which to send data
         let mut channel: Vec<u8> = Vec::new();
 
-        let params = super::read_or_gen_params(super::DEFAULT_PARAMS_PATH);
+        let params = read_or_gen_params(DEFAULT_PARAMS_PATH);
         let (pk, sk) = sign::gen_keypair();
         let mut table = Vec::new();
 
         // send message
-        super::meter_consume(&params, &sk, &mut channel, &consumption);
+        meter_consume(&params, &sk, &mut channel, &consumption);
 
         // receive
-        super::customer_read_consumption(&mut channel.as_slice(), &pk, &mut table);
+        customer_read_consumption(&mut channel.as_slice(), &pk, &mut table);
 
         // check result
         let ref row = table[0];
         assert_eq!(row.cons, units);
         assert_eq!(row.other, hour);
     }
-}
 
-/************************ Stuff that is just for the impl of BillingProtocol so that the test works *********************/
-/*
-enum Role<P: Read + Write, M: Read + Write> {
-    Server(ProviderState<P>),
-    Client(MeterState<M>, CustomerState<P, M>),
-}
-
-/// Just for the implementation of BillingProtocol for testing purposes
-pub struct ThreeParty<T: Read + Write> {
-    /// Meter, Provider or Customer
-    role: Role<T, UnixStream>,
-}
-
-impl<T: Read + Write> BillingProtocol<T> for ThreeParty<T> {
-    type Consumption = IntegerConsumption;
-    type Prices = Prices;
-
-    fn null_prices() -> Self::Prices {
-        [0.0; 7*24]
+    /************************ Stuff that is just for the impl of BillingProtocol so that the test works *********************/
+    enum Role<P: Read + Write, M: Read + Write> {
+        Server(ProviderState<P>),
+        Client(MeterState<M>, CustomerState<P, M>),
     }
-
-    fn consume(&mut self, consumption: &Self::Consumption) {
-        // assert we are a Client
-        assert!( match self.role { Role::Client(_,_) => true, _ => false } );
+    
+    /// Just for the implementation of BillingProtocol for testing purposes
+    pub struct ThreeParty<T: Read + Write> {
+        /// Meter, Provider or Customer
+        role: Role<T, UnixStream>,
     }
-}*/
+    
+    impl<T: Read + Write> BillingProtocol<T, i64> for ThreeParty<T> {
+        type Consumption = IntegerConsumption;
+        type Prices = Prices;
+    
+        fn null_prices() -> Self::Prices {
+            [0; 7*24]
+        }
+    
+        fn consume(&mut self, consumption: &Self::Consumption) {
+            //println!("begin consume");
+            // assert we are a Client
+            let (ref mut meter, ref mut customer) = match self.role {
+                Role::Client(ref mut m, ref mut c) => (m, c),
+                _ => panic!("This function should be called on the Client"),
+            };
+    
+            customer.read_provider_messages();
+            meter.consume(consumption);
+            customer.read_meter_messages();
+            //println!("end consume");
+        }
+    
+        fn send_billing_information(&mut self) {
+            //println!("begin send_billing_info");
+            // assert we are a Client
+            let ref mut customer = match self.role {
+                Role::Client(_, ref mut c) => c,
+                _ => panic!("This function should be called on the Client"),
+            };
+    
+            customer.send_billing_information();
+            //println!("end send billing info");
+        }
+    
+        fn pay_bill(&mut self) -> i64 {
+            //println!("begin pay_bill");
+            // assert we are a Server
+            let ref mut provider = match self.role {
+                Role::Server(ref mut s) => s,
+                _ => panic!("This function should be called on the Server"),
+            };
+    
+            provider.receive_billing_information();
+            //println!("end pay bill");
+            provider.pay_bill()
+        }
+    
+    
+        fn change_prices(&mut self, prices: &Prices) {
+            //println!("begin change prices");
+            // assert we are a Server
+            let ref mut provider = match self.role {
+                Role::Server(ref mut s) => s,
+                _ => panic!("This function should be called on the Server"),
+            };       
+    
+            provider.change_prices(prices);
+            //println!("end change prices");
+        }
+    
+        fn new_meter(provider_channel: T, prices: &Prices, keys: super::super::MeterKeys) -> ThreeParty<T> {
+            let socket_path = "./meter_to_customer_test_socket".to_string();
+            let socket_path_closure = socket_path.clone();
+    
+            let connect_thread = move || -> UnixStream {
+                let mut remaining_tries = 10;
+                let mut stream_option = None;
+    
+                while remaining_tries > 0 {
+                    thread::sleep(Duration::from_millis(2));
+                    let socket_path_clone = socket_path_closure.clone();
+                    let result = UnixStream::connect(socket_path_clone);
+                    if result.is_ok() {
+                        stream_option = Some(result.unwrap());
+                        break;
+                    }
+                    remaining_tries = remaining_tries - 1;
+                };
+    
+                stream_option.unwrap()
+            };
+    
+            let (m_sk, m_pk, p_pk) = match keys {
+                super::super::MeterKeys::ThreeParty(ms, mp, pp) => (ms, mp, pp),
+                _ => panic!("Wrong sort of MeterKeys"),
+            };
+            
+            let listener = UnixListener::bind(socket_path).unwrap();
+            let connector = thread::spawn(connect_thread);
+    
+            let stream1 = listener.accept().unwrap().0;
+            let stream2 = connector.join().unwrap();
+    
+            let params = read_or_gen_params(DEFAULT_PARAMS_PATH);
+            
+            let meter = MeterState::new(stream1, m_sk, params.clone());
+    
+            let mut prices_clone = [0 as i32; 7*24];
+            for i in 0..(7*24) {
+                prices_clone[i] = prices[i];
+            }
+    
+            let customer = CustomerState::new(stream2, provider_channel, prices_clone, p_pk, m_pk, params); 
+    
+            ThreeParty {
+                role: Role::Client(meter, customer),
+            }
+        }
+    
+        fn new_server(channel: T, keys: super::super::Keys, prices: &Prices) -> ThreeParty<T> {
+            let params = read_or_gen_params(DEFAULT_PARAMS_PATH);
+    
+            let mut prices_clone = [0 as i32; 7*24];
+            for i in 0..(7*24) {
+                prices_clone[i] = prices[i];
+            }
+            
+            ThreeParty {
+                role: Role::Server( ProviderState::new(channel, prices_clone, keys, params) ),
+            }
+        }
+    }
+}
 
