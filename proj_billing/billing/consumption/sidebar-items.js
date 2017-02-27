@@ -1,1 +1,1 @@
-initSidebarItems({"struct":[["Consumption","Consumption information for hourly time of use billing"]],"type":[["Prices","Co-efficient for the number of consumption units for each hour of each day of the week"]]});
+initSidebarItems({"mod":[["floating_consumption","Floating Consumption"],["integer_consumption","Integer Consumption"]],"trait":[["Consumption","Note that Cons doubles as the type of the price per cons, just to keep things simple"]]});

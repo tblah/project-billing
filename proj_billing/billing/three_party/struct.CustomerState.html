@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="rustdoc">
+    <meta name="description" content="API documentation for the Rust `CustomerState` struct in crate `proj_billing`.">
+    <meta name="keywords" content="rust, rustlang, rust-lang, CustomerState">
+
+    <title>proj_billing::billing::three_party::CustomerState - Rust</title>
+
+    <link rel="stylesheet" type="text/css" href="../../../rustdoc.css">
+    <link rel="stylesheet" type="text/css" href="../../../main.css">
+    
+
+    
+    
+</head>
+<body class="rustdoc">
+    <!--[if lte IE 8]>
+    <div class="warning">
+        This old browser is unsupported and will most likely display funky
+        things.
+    </div>
+    <![endif]-->
+
+    
+
+    <nav class="sidebar">
+        
+        <p class='location'><a href='../../index.html'>proj_billing</a>::<wbr><a href='../index.html'>billing</a>::<wbr><a href='index.html'>three_party</a></p><script>window.sidebarCurrent = {name: 'CustomerState', ty: 'struct', relpath: ''};</script><script defer src="sidebar-items.js"></script>
+    </nav>
+
+    <nav class="sub">
+        <form class="search-form js-only">
+            <div class="search-container">
+                <input class="search-input" name="search"
+                       autocomplete="off"
+                       placeholder="Click or press ‘S’ to search, ‘?’ for more options…"
+                       type="search">
+            </div>
+        </form>
+    </nav>
+
+    <section id='main' class="content struct">
+<h1 class='fqn'><span class='in-band'>Struct <a href='../../index.html'>proj_billing</a>::<wbr><a href='../index.html'>billing</a>::<wbr><a href='index.html'>three_party</a>::<wbr><a class='struct' href=''>CustomerState</a></span><span class='out-of-band'><span id='render-detail'>
+                   <a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">
+                       [<span class='inner'>&#x2212;</span>]
+                   </a>
+               </span><a class='srclink' href='../../../src/proj_billing/billing/three_party.rs.html#180-195' title='goto source code'>[src]</a></span></h1>
+<pre class='rust struct'>pub struct CustomerState&lt;P:&nbsp;<a class='trait' href='https://doc.rust-lang.org/nightly/std/io/trait.Read.html' title='std::io::Read'>Read</a> + <a class='trait' href='https://doc.rust-lang.org/nightly/std/io/trait.Write.html' title='std::io::Write'>Write</a>, M:&nbsp;<a class='trait' href='https://doc.rust-lang.org/nightly/std/io/trait.Read.html' title='std::io::Read'>Read</a> + <a class='trait' href='https://doc.rust-lang.org/nightly/std/io/trait.Write.html' title='std::io::Write'>Write</a>&gt; {
+    pub prices: <a class='type' href='../../../proj_billing/billing/consumption/integer_consumption/type.Prices.html' title='proj_billing::billing::consumption::integer_consumption::Prices'>Prices</a>,
+    // some fields omitted
+}</pre><div class='docblock'><p>State associated with the customer</p>
+</div><h2 class='fields'>Fields</h2><span id='structfield.prices' class='structfield'>
+                           <span id='prices.v' class='invisible'>
+                           <code>prices: <a class='type' href='../../../proj_billing/billing/consumption/integer_consumption/type.Prices.html' title='proj_billing::billing::consumption::integer_consumption::Prices'>Prices</a></code>
+                           </span></span><span class='stab '></span><div class='docblock'><p>The prices currently used to calculate the bill</p>
+</div><h2 id='methods'>Methods</h2><h3 class='impl'><span class='in-band'><code>impl&lt;P:&nbsp;<a class='trait' href='https://doc.rust-lang.org/nightly/std/io/trait.Read.html' title='std::io::Read'>Read</a> + <a class='trait' href='https://doc.rust-lang.org/nightly/std/io/trait.Write.html' title='std::io::Write'>Write</a>, M:&nbsp;<a class='trait' href='https://doc.rust-lang.org/nightly/std/io/trait.Read.html' title='std::io::Read'>Read</a> + <a class='trait' href='https://doc.rust-lang.org/nightly/std/io/trait.Write.html' title='std::io::Write'>Write</a>&gt; <a class='struct' href='../../../proj_billing/billing/three_party/struct.CustomerState.html' title='proj_billing::billing::three_party::CustomerState'>CustomerState</a>&lt;P, M&gt;</code></span><span class='out-of-band'><div class='ghost'></div><a class='srclink' href='../../../src/proj_billing/billing/three_party.rs.html#197-260' title='goto source code'>[src]</a></span></h3>
+<div class='impl-items'><h4 id='method.new' class='method'><span id='new.v' class='invisible'><code>fn <a href='#method.new' class='fnname'>new</a>(meter_channel: M,<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; provider_channel: P,<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; prices: <a class='type' href='../../../proj_billing/billing/consumption/integer_consumption/type.Prices.html' title='proj_billing::billing::consumption::integer_consumption::Prices'>Prices</a>,<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; provider_key: <a class='struct' href='../../../sodiumoxide/crypto/sign/ed25519/struct.PublicKey.html' title='sodiumoxide::crypto::sign::ed25519::PublicKey'>PublicKey</a>,<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; meter_key: <a class='struct' href='../../../sodiumoxide/crypto/sign/ed25519/struct.PublicKey.html' title='sodiumoxide::crypto::sign::ed25519::PublicKey'>PublicKey</a>,<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; params: <a class='type' href='../../../proj_crypto/asymmetric/commitments/type.DHParams.html' title='proj_crypto::asymmetric::commitments::DHParams'>DHParams</a>)<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; -&gt; <a class='struct' href='../../../proj_billing/billing/three_party/struct.CustomerState.html' title='proj_billing::billing::three_party::CustomerState'>CustomerState</a>&lt;P, M&gt;</code></span></h4>
+<div class='docblock'><p>Create a new CustomerState</p>
+</div><h4 id='method.send_billing_information' class='method'><span id='send_billing_information.v' class='invisible'><code>fn <a href='#method.send_billing_information' class='fnname'>send_billing_information</a>(&amp;mut self)</code></span></h4>
+<div class='docblock'><p>Calculate the bill and send it to the provider</p>
+</div><h4 id='method.read_meter_messages' class='method'><span id='read_meter_messages.v' class='invisible'><code>fn <a href='#method.read_meter_messages' class='fnname'>read_meter_messages</a>(&amp;mut self)</code></span></h4>
+<div class='docblock'><p>check for new consumption messages from the meter</p>
+</div><h4 id='method.read_provider_messages' class='method'><span id='read_provider_messages.v' class='invisible'><code>fn <a href='#method.read_provider_messages' class='fnname'>read_provider_messages</a>(&amp;mut self)</code></span></h4>
+<div class='docblock'><p>check for price changes from the provider</p>
+</div></div></section>
+    <section id='search' class="content hidden"></section>
+
+    <section class="footer"></section>
+
+    <aside id="help" class="hidden">
+        <div>
+            <h1 class="hidden">Help</h1>
+
+            <div class="shortcuts">
+                <h2>Keyboard Shortcuts</h2>
+
+                <dl>
+                    <dt>?</dt>
+                    <dd>Show this help dialog</dd>
+                    <dt>S</dt>
+                    <dd>Focus the search field</dd>
+                    <dt>&larrb;</dt>
+                    <dd>Move up in search results</dd>
+                    <dt>&rarrb;</dt>
+                    <dd>Move down in search results</dd>
+                    <dt>&#9166;</dt>
+                    <dd>Go to active search result</dd>
+                    <dt>+</dt>
+                    <dd>Collapse/expand all sections</dd>
+                </dl>
+            </div>
+
+            <div class="infos">
+                <h2>Search Tricks</h2>
+
+                <p>
+                    Prefix searches with a type followed by a colon (e.g.
+                    <code>fn:</code>) to restrict the search to a given type.
+                </p>
+
+                <p>
+                    Accepted types are: <code>fn</code>, <code>mod</code>,
+                    <code>struct</code>, <code>enum</code>,
+                    <code>trait</code>, <code>type</code>, <code>macro</code>,
+                    and <code>const</code>.
+                </p>
+
+                <p>
+                    Search functions by type signature (e.g.
+                    <code>vec -> usize</code> or <code>* -> vec</code>)
+                </p>
+            </div>
+        </div>
+    </aside>
+
+    
+
+    <script>
+        window.rootPath = "../../../";
+        window.currentCrate = "proj_billing";
+    </script>
+    <script src="../../../jquery.js"></script>
+    <script src="../../../main.js"></script>
+    <script defer src="../../../search-index.js"></script>
+</body>
+</html>

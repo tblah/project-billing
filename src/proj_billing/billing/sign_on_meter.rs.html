@@ -204,43 +204,6 @@
 <span id="160">160</span>
 <span id="161">161</span>
 <span id="162">162</span>
-<span id="163">163</span>
-<span id="164">164</span>
-<span id="165">165</span>
-<span id="166">166</span>
-<span id="167">167</span>
-<span id="168">168</span>
-<span id="169">169</span>
-<span id="170">170</span>
-<span id="171">171</span>
-<span id="172">172</span>
-<span id="173">173</span>
-<span id="174">174</span>
-<span id="175">175</span>
-<span id="176">176</span>
-<span id="177">177</span>
-<span id="178">178</span>
-<span id="179">179</span>
-<span id="180">180</span>
-<span id="181">181</span>
-<span id="182">182</span>
-<span id="183">183</span>
-<span id="184">184</span>
-<span id="185">185</span>
-<span id="186">186</span>
-<span id="187">187</span>
-<span id="188">188</span>
-<span id="189">189</span>
-<span id="190">190</span>
-<span id="191">191</span>
-<span id="192">192</span>
-<span id="193">193</span>
-<span id="194">194</span>
-<span id="195">195</span>
-<span id="196">196</span>
-<span id="197">197</span>
-<span id="198">198</span>
-<span id="199">199</span>
 </pre><pre class='rust '>
 <span class='doccomment'>//! # Sign on meter</span>
 <span class='doccomment'>//!</span>
@@ -260,7 +223,9 @@
     along with project-billing.  If not, see http://www.gnu.org/licenses/.*/</span>
 
 <span class='kw'>use</span> <span class='kw'>super</span>::<span class='ident'>BillingProtocol</span>;
-<span class='kw'>use</span> <span class='kw'>super</span>::<span class='ident'>consumption</span>::<span class='op'>*</span>;
+<span class='kw'>use</span> <span class='kw'>super</span>::<span class='ident'>consumption</span>::<span class='ident'>floating_consumption</span>::<span class='op'>*</span>;
+<span class='kw'>use</span> <span class='kw'>super</span>::<span class='ident'>consumption</span>::<span class='ident'>Consumption</span>;
+<span class='kw'>use</span> <span class='kw'>super</span>::<span class='ident'>common</span>;
 <span class='kw'>use</span> <span class='ident'>std</span>::<span class='ident'>io</span>::{<span class='ident'>Read</span>, <span class='ident'>Write</span>, <span class='ident'>ErrorKind</span>};
 <span class='kw'>use</span> <span class='ident'>proj_crypto</span>::<span class='ident'>asymmetric</span>::<span class='ident'>sign</span>;
 <span class='kw'>use</span> <span class='ident'>std</span>::<span class='ident'>mem</span>::<span class='ident'>transmute</span>;
@@ -288,8 +253,8 @@
     <span class='ident'>keys</span>: <span class='kw'>super</span>::<span class='ident'>Keys</span>,
 }
 
-<span class='kw'>impl</span><span class='op'>&lt;</span><span class='ident'>T</span>: <span class='ident'>Read</span> <span class='op'>+</span> <span class='ident'>Write</span><span class='op'>&gt;</span> <span class='ident'>BillingProtocol</span><span class='op'>&lt;</span><span class='ident'>T</span><span class='op'>&gt;</span> <span class='kw'>for</span> <span class='ident'>SignOnMeter</span><span class='op'>&lt;</span><span class='ident'>T</span><span class='op'>&gt;</span> {
-    <span class='kw'>type</span> <span class='ident'>Consumption</span> <span class='op'>=</span> <span class='ident'>Consumption</span>;
+<span class='kw'>impl</span><span class='op'>&lt;</span><span class='ident'>T</span>: <span class='ident'>Read</span> <span class='op'>+</span> <span class='ident'>Write</span><span class='op'>&gt;</span> <span class='ident'>BillingProtocol</span><span class='op'>&lt;</span><span class='ident'>T</span>, <span class='ident'>f64</span><span class='op'>&gt;</span> <span class='kw'>for</span> <span class='ident'>SignOnMeter</span><span class='op'>&lt;</span><span class='ident'>T</span><span class='op'>&gt;</span> {
+    <span class='kw'>type</span> <span class='ident'>Consumption</span> <span class='op'>=</span> <span class='ident'>FloatingConsumption</span>;
     <span class='kw'>type</span> <span class='ident'>Prices</span> <span class='op'>=</span> <span class='ident'>Prices</span>;
 
     <span class='kw'>fn</span> <span class='ident'>null_prices</span>() <span class='op'>-&gt;</span> <span class='self'>Self</span>::<span class='ident'>Prices</span> {
@@ -301,47 +266,8 @@
         <span class='macro'>assert</span><span class='macro'>!</span>(<span class='ident'>consumption</span>.<span class='ident'>is_valid</span>());
 
         <span class='comment'>// check for new prices information</span>
-        <span class='kw'>const</span> <span class='ident'>BUF_LEN</span>: <span class='ident'>usize</span> <span class='op'>=</span> <span class='number'>4</span> <span class='op'>*</span> <span class='number'>7</span> <span class='op'>*</span> <span class='number'>24</span> <span class='op'>+</span> <span class='ident'>sign</span>::<span class='ident'>SIGNATUREBYTES</span>; <span class='comment'>// size_of apparently doesn&#39;t do constants</span>
-        <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>buf</span>: [<span class='ident'>u8</span>; <span class='ident'>BUF_LEN</span>] <span class='op'>=</span> [<span class='number'>0</span>; <span class='ident'>BUF_LEN</span>];
-
-        <span class='lifetime'>&#39;messages</span>: <span class='kw'>loop</span> { <span class='comment'>// in case several messages have been sent</span>
-            <span class='kw'>let</span> <span class='ident'>update_prices</span> <span class='op'>=</span> <span class='kw'>match</span> <span class='self'>self</span>.<span class='ident'>channel</span>.<span class='ident'>read</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>buf</span>) {
-                <span class='prelude-val'>Ok</span>(<span class='ident'>s</span>) <span class='op'>=&gt;</span> { <span class='macro'>assert_eq</span><span class='macro'>!</span>(<span class='ident'>s</span>, <span class='ident'>buf</span>.<span class='ident'>len</span>()); <span class='bool-val'>true</span> },
-                <span class='prelude-val'>Err</span>(<span class='ident'>e</span>) <span class='op'>=&gt;</span> <span class='kw'>match</span> <span class='ident'>e</span>.<span class='ident'>kind</span>() {
-                    <span class='ident'>ErrorKind</span>::<span class='ident'>WouldBlock</span> <span class='op'>=&gt;</span> <span class='bool-val'>false</span>,
-                    _ <span class='op'>=&gt;</span> <span class='macro'>panic</span><span class='macro'>!</span>(<span class='string'>&quot;Device read failed with error {}&quot;</span>, <span class='ident'>e</span>),
-                },
-            };
-
-            <span class='kw'>if</span> <span class='ident'>update_prices</span> {
-                <span class='kw'>let</span> <span class='ident'>data_buf</span> <span class='op'>=</span> <span class='kw'>match</span> <span class='ident'>sign</span>::<span class='ident'>verify</span>(<span class='kw-2'>&amp;</span><span class='ident'>buf</span>, <span class='kw-2'>&amp;</span><span class='self'>self</span>.<span class='ident'>keys</span>.<span class='ident'>their_pk</span>) {
-                    <span class='prelude-val'>Ok</span>(<span class='ident'>b</span>) <span class='op'>=&gt;</span> <span class='ident'>b</span>,
-                    <span class='prelude-val'>Err</span>(_) <span class='op'>=&gt;</span> { <span class='ident'>drop</span>(<span class='self'>self</span>); <span class='macro'>panic</span><span class='macro'>!</span>(<span class='string'>&quot;Verification of new pricing strategy failed&quot;</span>) },
-                };
-
-                <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>new_prices</span>: <span class='ident'>Prices</span> <span class='op'>=</span> [<span class='number'>0.0</span>; <span class='number'>24</span><span class='op'>*</span><span class='number'>7</span>];
-
-                <span class='kw'>for</span> <span class='ident'>i</span> <span class='kw'>in</span> <span class='number'>0</span>..<span class='ident'>new_prices</span>.<span class='ident'>len</span>() {
-                    <span class='kw'>let</span> <span class='ident'>buf_i</span> <span class='op'>=</span> <span class='ident'>i</span> <span class='op'>*</span> <span class='number'>4</span>;
-                    <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>these_bytes</span> <span class='op'>=</span> [<span class='number'>0</span>; <span class='number'>4</span>];
-
-                    <span class='kw'>for</span> <span class='ident'>i</span> <span class='kw'>in</span> <span class='number'>0</span>..<span class='number'>4</span> {
-                        <span class='ident'>these_bytes</span>[<span class='ident'>i</span>] <span class='op'>=</span> <span class='ident'>data_buf</span>[<span class='ident'>buf_i</span> <span class='op'>+</span> <span class='ident'>i</span>]
-                    }
-
-                    <span class='ident'>new_prices</span>[<span class='ident'>i</span>] <span class='op'>=</span> <span class='kw'>unsafe</span> {
-                        <span class='ident'>transmute</span>::<span class='op'>&lt;</span>[<span class='ident'>u8</span>; <span class='number'>4</span>], <span class='ident'>f32</span><span class='op'>&gt;</span>(<span class='ident'>these_bytes</span>)
-                    };
-
-                    <span class='kw'>if</span> <span class='ident'>new_prices</span>[<span class='ident'>i</span>] <span class='op'>&lt;</span> <span class='number'>0.0</span> {
-                        <span class='macro'>panic</span><span class='macro'>!</span>(<span class='string'>&quot;Invalid price is less than 0&quot;</span>);
-                    }
-                }
-
-                <span class='self'>self</span>.<span class='ident'>prices</span> <span class='op'>=</span> <span class='ident'>new_prices</span>;
-            } <span class='kw'>else</span> {
-                <span class='kw'>break</span> <span class='lifetime'>&#39;messages</span>;
-            }
+        <span class='kw'>if</span> <span class='kw'>let</span> <span class='prelude-val'>Some</span>(<span class='ident'>new_prices</span>) <span class='op'>=</span> <span class='ident'>common</span>::<span class='ident'>check_for_new_prices</span>::<span class='op'>&lt;</span><span class='ident'>T</span>, <span class='ident'>f32</span>, <span class='ident'>FloatingConsumption</span><span class='op'>&gt;</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='self'>self</span>.<span class='ident'>channel</span>, <span class='kw-2'>&amp;</span><span class='self'>self</span>.<span class='ident'>keys</span>.<span class='ident'>their_pk</span>) {
+            <span class='self'>self</span>.<span class='ident'>prices</span> <span class='op'>=</span> <span class='ident'>new_prices</span>;
         }
 
         <span class='comment'>// now actually work out the price</span>
@@ -409,19 +335,15 @@
     <span class='kw'>fn</span> <span class='ident'>change_prices</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='self'>self</span>, <span class='ident'>prices</span>: <span class='kw-2'>&amp;</span><span class='self'>Self</span>::<span class='ident'>Prices</span>) {
         <span class='macro'>assert</span><span class='macro'>!</span>(<span class='self'>self</span>.<span class='ident'>role</span> <span class='op'>==</span> <span class='ident'>Role</span>::<span class='ident'>Server</span>);
 
-        <span class='kw'>let</span> <span class='ident'>buf</span> <span class='op'>=</span> <span class='kw'>unsafe</span> {
-            <span class='ident'>transmute</span>::<span class='op'>&lt;</span><span class='ident'>Prices</span>, [<span class='ident'>u8</span>; <span class='number'>4</span><span class='op'>*</span><span class='number'>24</span><span class='op'>*</span><span class='number'>7</span>]<span class='op'>&gt;</span>(<span class='op'>*</span><span class='ident'>prices</span>)
-        };
-
-        <span class='kw'>let</span> <span class='ident'>sbuf</span> <span class='op'>=</span> <span class='ident'>sign</span>::<span class='ident'>sign</span>(<span class='kw-2'>&amp;</span><span class='ident'>buf</span>, <span class='kw-2'>&amp;</span><span class='self'>self</span>.<span class='ident'>keys</span>.<span class='ident'>my_sk</span>);
-
-        <span class='kw'>match</span> <span class='self'>self</span>.<span class='ident'>channel</span>.<span class='ident'>write</span>(<span class='kw-2'>&amp;</span><span class='ident'>sbuf</span>) {
-            <span class='prelude-val'>Ok</span>(<span class='ident'>s</span>) <span class='op'>=&gt;</span> <span class='macro'>assert_eq</span><span class='macro'>!</span>(<span class='ident'>s</span>, <span class='ident'>sbuf</span>.<span class='ident'>len</span>()),
-            <span class='prelude-val'>Err</span>(<span class='ident'>e</span>) <span class='op'>=&gt;</span> <span class='macro'>panic</span><span class='macro'>!</span>(<span class='string'>&quot;Failed to write the new prices with error {}&quot;</span>, <span class='ident'>e</span>),
-        };
+        <span class='ident'>common</span>::<span class='ident'>change_prices</span>::<span class='op'>&lt;</span><span class='ident'>T</span>, <span class='ident'>f32</span>, <span class='ident'>FloatingConsumption</span><span class='op'>&gt;</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='self'>self</span>.<span class='ident'>channel</span>, <span class='kw-2'>&amp;</span><span class='self'>self</span>.<span class='ident'>keys</span>.<span class='ident'>my_sk</span>, <span class='ident'>prices</span>);
     }
 
-    <span class='kw'>fn</span> <span class='ident'>new_meter</span>(<span class='ident'>channel</span>: <span class='ident'>T</span>, <span class='ident'>prices</span>: <span class='kw-2'>&amp;</span><span class='ident'>Prices</span>, <span class='ident'>keys</span>: <span class='kw'>super</span>::<span class='ident'>Keys</span>) <span class='op'>-&gt;</span> <span class='ident'>SignOnMeter</span><span class='op'>&lt;</span><span class='ident'>T</span><span class='op'>&gt;</span> {
+    <span class='kw'>fn</span> <span class='ident'>new_meter</span>(<span class='ident'>channel</span>: <span class='ident'>T</span>, <span class='ident'>prices</span>: <span class='kw-2'>&amp;</span><span class='ident'>Prices</span>, <span class='ident'>meter_keys</span>: <span class='kw'>super</span>::<span class='ident'>MeterKeys</span>) <span class='op'>-&gt;</span> <span class='ident'>SignOnMeter</span><span class='op'>&lt;</span><span class='ident'>T</span><span class='op'>&gt;</span> {
+        <span class='kw'>let</span> <span class='ident'>keys</span> <span class='op'>=</span> <span class='kw'>match</span> <span class='ident'>meter_keys</span> {
+            <span class='kw'>super</span>::<span class='ident'>MeterKeys</span>::<span class='ident'>SignOnMeter</span>(<span class='ident'>k</span>) <span class='op'>=&gt;</span> <span class='ident'>k</span>,
+            _ <span class='op'>=&gt;</span> <span class='macro'>panic</span><span class='macro'>!</span>(<span class='string'>&quot;Wrong sort of MeterKeys&quot;</span>),
+        };
+        
         <span class='ident'>SignOnMeter</span> {
             <span class='ident'>role</span>: <span class='ident'>Role</span>::<span class='ident'>Meter</span>,
             <span class='ident'>channel</span>: <span class='ident'>channel</span>,
@@ -431,12 +353,16 @@
         }
     }
 
-    <span class='kw'>fn</span> <span class='ident'>new_server</span>(<span class='ident'>channel</span>: <span class='ident'>T</span>, <span class='ident'>keys</span>: <span class='kw'>super</span>::<span class='ident'>Keys</span>) <span class='op'>-&gt;</span> <span class='ident'>SignOnMeter</span><span class='op'>&lt;</span><span class='ident'>T</span><span class='op'>&gt;</span> {
+    <span class='kw'>fn</span> <span class='ident'>new_server</span>(<span class='ident'>channel</span>: <span class='ident'>T</span>, <span class='ident'>keys</span>: <span class='kw'>super</span>::<span class='ident'>Keys</span>, <span class='ident'>prices</span>: <span class='kw-2'>&amp;</span><span class='ident'>Prices</span>) <span class='op'>-&gt;</span> <span class='ident'>SignOnMeter</span><span class='op'>&lt;</span><span class='ident'>T</span><span class='op'>&gt;</span> {
+        <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>prices_clone</span> <span class='op'>=</span> [<span class='number'>0</span> <span class='kw'>as</span> <span class='ident'>f32</span>; <span class='number'>7</span><span class='op'>*</span><span class='number'>24</span>];
+        <span class='kw'>for</span> <span class='ident'>i</span> <span class='kw'>in</span> <span class='number'>0</span>..(<span class='number'>7</span><span class='op'>*</span><span class='number'>24</span>) {
+            <span class='ident'>prices_clone</span>[<span class='ident'>i</span>] <span class='op'>=</span> <span class='ident'>prices</span>[<span class='ident'>i</span>];
+        }
         <span class='ident'>SignOnMeter</span> {
             <span class='ident'>role</span>: <span class='ident'>Role</span>::<span class='ident'>Server</span>,
             <span class='ident'>channel</span>: <span class='ident'>channel</span>,
             <span class='ident'>running_total</span>: <span class='number'>0.0</span>,
-            <span class='ident'>prices</span>: [<span class='number'>0.0</span>; <span class='number'>7</span><span class='op'>*</span><span class='number'>24</span>],
+            <span class='ident'>prices</span>: <span class='ident'>prices_clone</span>,
             <span class='ident'>keys</span>: <span class='ident'>keys</span>,
         }
     }

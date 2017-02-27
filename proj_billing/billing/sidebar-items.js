@@ -1,1 +1,1 @@
-initSidebarItems({"mod":[["consumption","Consumption"],["sign_on_meter","Sign on meter"]],"struct":[["Keys","Cryptographic Keys"]],"trait":[["BillingProtocol","Functionality which all billing protocols must provide."]]});
+initSidebarItems({"enum":[["MeterKeys","Ugly hack to make new_meter have the right parameters"]],"mod":[["consumption","Consumption schemes"],["sign_on_meter","Sign on meter"],["three_party","Three Party Billing Scheme"]],"struct":[["Keys","Cryptographic Keys"]],"trait":[["BillingProtocol","Functionality which all billing protocols must provide."]]});
