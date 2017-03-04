@@ -13,3 +13,8 @@ proj_net = { git = "https://github.com/tblah/project-net" }
 proj_crypto = { git = "https://github.com/tblah/project-crypto" }
 sodiumoxide = "0.0.12"
 gmp = "0.3.1"
+getopts = "0.2"
+
+[[bin]]
+name = "interactive-demo"
+doc = true
