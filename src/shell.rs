@@ -66,7 +66,7 @@ impl<T> InteractiveShell<T> {
             exit(0); // success
         }
 
-        self.register_command("exit", "exit",  "Closes the program", Box::new(exit_command));
+        self.register_command("exit", "exit\t\t\t",  "Closes the program", Box::new(exit_command));
 
         // copy suitable to be moved into help_command
         let mut help_info = HashMap::new();
@@ -75,19 +75,19 @@ impl<T> InteractiveShell<T> {
         }
 
         // manually add help because it is not registered as a command yet
-        help_info.insert("help".to_string(), "Display this help message".to_string());
+        help_info.insert("help\t\t\t".to_string(), "Display this help message".to_string());
         
         let help_command = move |shared: &mut T, args: Vec<String>| {
             let _ = shared; // suppress unused warning (#[ignore()] does not seem to work on closures)
             complain_arg(&args);
             println!("Usage:");
-            println!("Command\t\t\tDescription\n");
+            println!("Command\t\t\t\tDescription");
             for (name, help) in help_info.iter() {
-                println!("{}\t\t\t{}", name, help);
+                println!("{}\t{}", name, help);
             }
         };
 
-        self.register_command("help", "help", "Display this help message", Box::new(help_command));
+        self.register_command("help", "help\t\t", "Display this help message", Box::new(help_command));
 
         // repl
         loop {

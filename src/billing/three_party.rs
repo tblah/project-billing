@@ -235,15 +235,15 @@ impl<P: Read + Write, M: Read + Write> CustomerState<P, M> {
         out
     }
 
-    /// Calculate the bill and send it to the provider
-    pub fn send_billing_information(&mut self) {
+    /// Calculate the bill and send it to the provider and return the bill
+    pub fn send_billing_information(&mut self) -> i64 {
         // calculate what we think that the bill will be and what we expect a to be
         let mut bill = 0 as i64;
         let mut a = Mpz::zero();
 
         // do nothing if there is no bill to send
         if self.consumption_table.len() == 0 {
-            return;
+            return 0;
         }
 
         for row in &self.consumption_table {
@@ -272,6 +272,7 @@ impl<P: Read + Write, M: Read + Write> CustomerState<P, M> {
 
         // empty the table
         self.consumption_table.clear();
+        bill
     }
     
     /// check for new consumption messages from the meter
@@ -293,7 +294,7 @@ pub struct ProviderState<T: Read + Write> {
     /// Channel through which to communicate to the customer
     channel: T,
     /// The prices currently used to calculate the bill
-    prices: Prices,
+    pub prices: Prices,
     /// Signing keys
     keys: super::Keys,
     /// Commitment parameters
