@@ -125,7 +125,7 @@ fn main() {
         }
 
         // required options
-        if !(matches.opt_present("public-coms-key") && matches.opt_present("dh-params") && matches.opt_present("sign-key") && matches.opt_present("sign_trusted_pk")) {
+        if !(matches.opt_present("public-coms-key") && matches.opt_present("dh-params") && matches.opt_present("sign-key") && matches.opt_present("sign-trusted-pk")) {
             println!("Missing some required option");
             print_usage(&executable_name, &opts);
         }
