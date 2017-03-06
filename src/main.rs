@@ -24,6 +24,7 @@ use getopts::Options;
 use std::env;
 use std::process;
 use proj_net::*;
+use proj_crypto::asymmetric::sign;
 
 const DEFAULT_WAN_SOCKET_ADDR: &'static str = "127.0.0.1:1025";
 const DEFAULT_LAN_SOCKET_ADDR: &'static str = "127.0.0.1:1026";
@@ -33,10 +34,10 @@ fn print_usage(executable_name: &str, opts: &Options) -> ! {
     println!("There is NO WAARRANTY, to the extent permitted by law.");
     println!("The cryptography used has not been reviewed by any experts. You should not use it for anything serious.\n");
     
-    let brief1 = format!("To generate keys: {} --keygen OUTPUT_FILE\n", executable_name);
-    let brief2 = format!("To run a provider: {} --provider MY_KEYPAIR --public-coms-key PUBLIC_KEY_FILE --dh-params DH_PARAMS --sign-secret-key SIGN_KEY --sign-trusted-pk SIGN_PUBKEY [--wan-socket IPADDR:PORT]\n", executable_name);
+    let brief1 = format!("To generate communication (and optionally: signing) keys: {} --keygen OUTPUT_FILE [--sign-key OUTPUT_FILE2]\n", executable_name);
+    let brief2 = format!("To run a provider: {} --provider MY_KEYPAIR --public-coms-key PUBLIC_KEY_FILE --dh-params DH_PARAMS --sign-key SIGN_KEY --sign-trusted-pk SIGN_PUBKEY [--wan-socket IPADDR:PORT]\n", executable_name);
     let brief3 = format!("To run a customer: {} --customer MY_KEYPAIR --public-coms-key PUBLIC_KEY_FILE --dh-params DH_PARAMS --sign-trusted-pk SIGN_PUBKEY [--wan-socket IPADDR:PORT] [--lan-socket IPADDR:PORT]\n", executable_name);
-    let brief4 = format!("To run a meter: {} --meter --dh-params DH_PARAMS --sign-secret-key SIGN_KEY [--lan-socket IPADDR:PORT]\n", executable_name);
+    let brief4 = format!("To run a meter: {} --meter --dh-params DH_PARAMS --sign-key SIGN_KEY [--lan-socket IPADDR:PORT]\n", executable_name);
     
     print!("{}", opts.usage(&(brief1+&brief2+&brief3+&brief4)));
     process::exit(1)
@@ -71,7 +72,7 @@ fn main() {
     opts.optopt("p", "dh-params", "The diffie-hellman parameters for the commitments", "DH_PARAMS");
 
     // required for meter and provider
-    opts.optopt("k", "sign-secret-key", "The secret key for signing billing messages", "SIGN_KEY");
+    opts.optopt("k", "sign-key", "The secret key for signing billing messages", "SIGN_KEY");
 
     // required for provider and customer
     opts.optopt("s", "sign-trusted-pk", "The public key for verifying signatures", "SIGN_PUBKEY");
@@ -104,9 +105,13 @@ fn main() {
     // actually do stuff
     if matches.opt_present("keygen") {
         // incompatible options
-        if matches.opt_present("public-coms-key") | matches.opt_present("dh-params") | matches.opt_present("sign-secret-key") | matches.opt_present("sign-trusted-pk") | matches.opt_present("lan-socket") | matches.opt_present("wan-socket") {
+        if matches.opt_present("public-coms-key") | matches.opt_present("dh-params") | matches.opt_present("sign-trusted-pk") | matches.opt_present("lan-socket") | matches.opt_present("wan-socket") {
             println!("Those options do not work with keygen");
             print_usage(&executable_name, &opts);
+        }
+
+        if matches.opt_present("sign-key") {
+            sign::key_gen_to_file(matches.opt_str("sign-key").unwrap().as_str());
         }
 
         return key_gen_to_file(matches.opt_str("keygen").unwrap().as_str());
@@ -120,7 +125,7 @@ fn main() {
         }
 
         // required options
-        if !(matches.opt_present("public-coms-key") && matches.opt_present("dh-params") && matches.opt_present("sign-secret-key") && matches.opt_present("sign_trusted_pk")) {
+        if !(matches.opt_present("public-coms-key") && matches.opt_present("dh-params") && matches.opt_present("sign-key") && matches.opt_present("sign_trusted_pk")) {
             println!("Missing some required option");
             print_usage(&executable_name, &opts);
         }
@@ -138,8 +143,8 @@ fn main() {
 
     if matches.opt_present("customer") {
         // incompatible options
-        if matches.opt_present("sign-secret-key") {
-            println!("sign-secret-key is not a compatible option for customer");
+        if matches.opt_present("sign-key") {
+            println!("sign-key is not a compatible option for customer");
             print_usage(&executable_name, &opts);
         }
 
@@ -174,7 +179,7 @@ fn main() {
         }
 
         // required options
-        if !(matches.opt_present("dh-params") && matches.opt_present("sign-secret-key")) {
+        if !(matches.opt_present("dh-params") && matches.opt_present("sign-key")) {
             println!("Missing some required option");
             print_usage(&executable_name, &opts);
         }
