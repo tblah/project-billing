@@ -25,6 +25,11 @@ use std::env;
 use std::process;
 use proj_net::*;
 use proj_crypto::asymmetric::sign;
+use proj_billing::billing::three_party::*;
+use std::net::{TcpListener, TcpStream};
+use std::path::Path;
+use std::process::exit;
+use proj_billing::billing::Keys;
 
 const DEFAULT_WAN_SOCKET_ADDR: &'static str = "127.0.0.1:1025";
 const DEFAULT_LAN_SOCKET_ADDR: &'static str = "127.0.0.1:1026";
@@ -35,8 +40,8 @@ fn print_usage(executable_name: &str, opts: &Options) -> ! {
     println!("The cryptography used has not been reviewed by any experts. You should not use it for anything serious.\n");
     
     let brief1 = format!("To generate communication (and optionally: signing) keys: {} --keygen OUTPUT_FILE [--sign-key OUTPUT_FILE2]\n", executable_name);
-    let brief2 = format!("To run a provider: {} --provider MY_KEYPAIR --public-coms-key PUBLIC_KEY_FILE --dh-params DH_PARAMS --sign-key SIGN_KEY --sign-trusted-pk SIGN_PUBKEY [--wan-socket IPADDR:PORT]\n", executable_name);
-    let brief3 = format!("To run a customer: {} --customer MY_KEYPAIR --public-coms-key PUBLIC_KEY_FILE --dh-params DH_PARAMS --sign-trusted-pk SIGN_PUBKEY [--wan-socket IPADDR:PORT] [--lan-socket IPADDR:PORT]\n", executable_name);
+    let brief2 = format!("To run a provider: {} --provider MY_KEYPAIR --public-coms-key PUBLIC_KEY_FILE --dh-params DH_PARAMS --sign-key SIGN_KEY --sign-trusted-pk SIGN_PUBKEY --meter-sign-pk SIGN_PUBKEY [--wan-socket IPADDR:PORT]\n", executable_name);
+    let brief3 = format!("To run a customer: {} --customer MY_KEYPAIR --public-coms-key PUBLIC_KEY_FILE --dh-params DH_PARAMS --meter-sign-pk SIGN_PUBKEY --provider-sign-pk SIGN_PUBKEY [--wan-socket IPADDR:PORT] [--lan-socket IPADDR:PORT]\n", executable_name);
     let brief4 = format!("To run a meter: {} --meter --dh-params DH_PARAMS --sign-key SIGN_KEY [--lan-socket IPADDR:PORT]\n", executable_name);
     
     print!("{}", opts.usage(&(brief1+&brief2+&brief3+&brief4)));
@@ -69,13 +74,16 @@ fn main() {
     opts.optopt("c", "public-coms-key", "The trusted public keys for communication", "PUBLIC_KEY_FILE");
 
     // required for all main modes
-    opts.optopt("p", "dh-params", "The diffie-hellman parameters for the commitments", "DH_PARAMS");
+    opts.optopt("d", "dh-params", "The diffie-hellman parameters for the commitments", "DH_PARAMS");
 
     // required for meter and provider
     opts.optopt("k", "sign-key", "The secret key for signing billing messages", "SIGN_KEY");
 
-    // required for provider and customer
-    opts.optopt("s", "sign-trusted-pk", "The public key for verifying signatures", "SIGN_PUBKEY");
+    // required for the customer
+    opts.optopt("p", "provider-sign-pk", "The public key for verifying signatures", "SIGN_PUBKEY");
+
+    // required for customer and provider
+    opts.optopt("m", "meter-sign-pk", "The public key used to verify signatures from the meter", "SIGN_PUBKEY");
 
     // required for meter and customer
     opts.optopt("l", "lan-socket", &format!("The socket for communication between the customer and meter. The default is {}.", DEFAULT_LAN_SOCKET_ADDR), "IPADDR:PORT");
@@ -103,9 +111,11 @@ fn main() {
     }
 
     // actually do stuff
+    sodiumoxide::init();
+    
     if matches.opt_present("keygen") {
         // incompatible options
-        if matches.opt_present("public-coms-key") | matches.opt_present("dh-params") | matches.opt_present("sign-trusted-pk") | matches.opt_present("lan-socket") | matches.opt_present("wan-socket") {
+        if matches.opt_present("public-coms-key") | matches.opt_present("dh-params") | matches.opt_present("meter-sign-pk") | matches.opt_present("provider-sign-pk") | matches.opt_present("lan-socket") | matches.opt_present("wan-socket") {
             println!("Those options do not work with keygen");
             print_usage(&executable_name, &opts);
         }
@@ -119,13 +129,13 @@ fn main() {
     
     if matches.opt_present("provider") {
         // incompatible options
-        if matches.opt_present("lan-socket") {
-            println!("lan-socket is not a compatible option for provider");
+        if matches.opt_present("lan-socket") | matches.opt_present("provider-sign-pk") {
+            println!("That is not a compatible option for provider");
             print_usage(&executable_name, &opts);
         }
 
         // required options
-        if !(matches.opt_present("public-coms-key") && matches.opt_present("dh-params") && matches.opt_present("sign-key") && matches.opt_present("sign-trusted-pk")) {
+        if !(matches.opt_present("public-coms-key") && matches.opt_present("dh-params") && matches.opt_present("sign-key") && matches.opt_present("meter-sign-pk")) {
             println!("Missing some required option");
             print_usage(&executable_name, &opts);
         }
@@ -137,8 +147,9 @@ fn main() {
             String::from(DEFAULT_WAN_SOCKET_ADDR)
         };
 
-        println!("I am a happy provider on {}", wan_socket);
-        return;
+        start_provider(matches.opt_str("dh-params").unwrap(), matches.opt_str("provider").unwrap(),
+                       matches.opt_str("public-coms-key").unwrap(), matches.opt_str("sign-key").unwrap(),
+                       matches.opt_str("meter-sign-pk").unwrap(), wan_socket);
     }
 
     if matches.opt_present("customer") {
@@ -149,7 +160,7 @@ fn main() {
         }
 
         // required options
-        if !(matches.opt_present("public-coms-key") && matches.opt_present("dh-params") && matches.opt_present("sign-trusted-pk")) {
+        if !(matches.opt_present("public-coms-key") && matches.opt_present("dh-params") && matches.opt_present("meter-sign-pk") && matches.opt_present("provider-sign-pk")) {
             println!("Missing some required option");
             print_usage(&executable_name, &opts);
         }
@@ -167,13 +178,14 @@ fn main() {
             String::from(DEFAULT_LAN_SOCKET_ADDR)
         };
         
-        println!("I am a happy customer on {} (WAN) and {} (LAN)", wan_socket, lan_socket);
-        return;
+        start_customer(matches.opt_str("dh-params").unwrap(), matches.opt_str("customer").unwrap(),
+                       matches.opt_str("public-coms-key").unwrap(), matches.opt_str("meter-sign-pk").unwrap(),
+                       matches.opt_str("provider-sign-pk").unwrap(), wan_socket, lan_socket);
     }
 
     if matches.opt_present("meter") {
         // incompatible options
-        if matches.opt_present("public-coms-key") | matches.opt_present("sign-trusted-pk") | matches.opt_present("wan-socket") {
+        if matches.opt_present("public-coms-key") | matches.opt_present("meter-sign-pk") | matches.opt_present("provider-sign-pk") | matches.opt_present("wan-socket") {
             println!("Those options do not work with meter");
             print_usage(&executable_name, &opts);
         }
@@ -190,11 +202,117 @@ fn main() {
             String::from(DEFAULT_LAN_SOCKET_ADDR)
         };
 
-        let mut shell = shell::InteractiveShell::new("meter", ());
-        shell.start();
-        return;
+        start_meter(matches.opt_str("dh-params").unwrap(), matches.opt_str("sign-key").unwrap(), lan_socket);
     }
 
     println!("No mode specified!");
     print_usage(&executable_name, &opts);
+}
+
+fn assert_file_exists(path_str: &String) {
+    let path = Path::new(path_str);
+
+    if !(path.is_file()) {
+        println!("{} is not a file. Exiting.", path_str);
+        exit(1); // failure
+    }
+}
+
+fn start_meter(dhparams_path: String, sign_key_path: String, lan_socket_path: String) -> ! {
+    assert_file_exists(&sign_key_path);
+
+    println!("Starting a meter on {} using the diffie-hellman parameters at {} and the signing key at {}", lan_socket_path, dhparams_path, sign_key_path);
+    
+    // get dh-params
+    let dh_params = read_or_gen_params(dhparams_path);
+
+    // get signing key
+    let (_, sk) = sign::get_keypair(sign_key_path);
+
+    // set up channel
+    let channel = match TcpStream::connect(lan_socket_path.as_str()) {
+        Ok(c) => c,
+        Err(e) => {
+            println!("Error connecting to {}: {}.", lan_socket_path, e);
+            exit(1);
+        },
+    };
+
+    let meter = MeterState::new(channel, sk, dh_params);
+
+    let mut shell = shell::InteractiveShell::new("meter", meter);
+    shell.start();
+}
+
+fn start_customer(dhparams_path: String, private_coms_key_path: String, public_coms_key_path: String, meter_sign_pk_path: String,
+                  provider_sign_pk_path: String, wan_socket: String, lan_socket: String) -> !{
+    assert_file_exists(&private_coms_key_path);
+    assert_file_exists(&public_coms_key_path);
+    assert_file_exists(&meter_sign_pk_path);
+    assert_file_exists(&provider_sign_pk_path);
+
+    println!("Starting a customer on on {} (LAN) -> {} (WAN) using communication keys {} and {} and trusting signing keys {} and {}", lan_socket, wan_socket, private_coms_key_path, public_coms_key_path, meter_sign_pk_path, provider_sign_pk_path);
+
+    // get dh-params
+    let dh_params = read_or_gen_params(dhparams_path);
+
+    // get coms keys
+    let (coms_pks, coms_keys) = get_keys(private_coms_key_path, public_coms_key_path);
+
+    // get signing public keys
+    let meter_sign_pk = sign::get_pubkey(meter_sign_pk_path);
+    let provider_sign_pk = sign::get_pubkey(provider_sign_pk_path);
+
+    // start listening for connections from the meter
+    let listener = match TcpListener::bind(lan_socket.as_str()) {
+        Err(e) => { panic!("Error listening for TCP connections: {}.", e); }
+        Ok(l) => {l},
+    };
+
+    // start crypto with provider
+    let mut client = match client::start(wan_socket.as_str(), coms_keys, &coms_pks) {
+        Err(e) => panic!("Client failed to start with error {:?}", e),
+        Ok(c) => c,
+    };
+    client.blocking_off(1);
+    
+    let customer = CustomerState::new(listener.incoming().next().unwrap().unwrap(), client, [1; 24*7], provider_sign_pk, meter_sign_pk, dh_params);
+
+    let mut shell = shell::InteractiveShell::new("customer", customer);
+    shell.start();
+}
+
+fn start_provider(dhparams_path: String, private_coms_key_path: String, public_coms_key_path: String, sign_key_path: String, sign_trusted_pk_path: String, wan_socket: String) -> ! {
+    assert_file_exists(&private_coms_key_path);
+    assert_file_exists(&public_coms_key_path);
+    assert_file_exists(&sign_key_path);
+    assert_file_exists(&sign_trusted_pk_path);
+
+    println!("Starting a provider on {}, using the diffie-hellman parameters at {}, communication keys at {} and {} and signing keys at {} and {}", wan_socket, dhparams_path, private_coms_key_path, public_coms_key_path, sign_key_path, sign_trusted_pk_path);
+
+    // get dh-params
+    let dh_params = read_or_gen_params(dhparams_path);
+
+    // get coms keys
+    let (coms_pks, coms_keys) = get_keys(private_coms_key_path, public_coms_key_path);
+
+    // get signing keys
+    let (_, sign_sk) = sign::get_keypair(sign_key_path);
+    let sign_pk = sign::get_pubkey(sign_trusted_pk_path);
+
+    // start listening for connections
+    let listener = match TcpListener::bind(wan_socket.as_str()) {
+        Err(e) => { panic!("Error listening for TCP connections: {}.", e); }
+        Ok(l) => {l},
+    };
+
+    // begin crypto on first connection
+    let mut server = server::do_key_exchange(listener.incoming().next().unwrap(), &coms_keys, &coms_pks).unwrap();
+    server.blocking_off(1);
+
+    // begin billing protocol layer
+    let provider = ProviderState::new(server, [1; 7*24], Keys{ my_sk: sign_sk, their_pk: sign_pk }, dh_params);
+
+    let mut shell = shell::InteractiveShell::new("provider", provider);
+    shell.start();
 }
