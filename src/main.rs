@@ -12,6 +12,8 @@
     You should have received a copy of the GNU General Public License
     along with project-net.  If not, see http://www.gnu.org/licenses/.*/
 
+mod shell;
+
 extern crate getopts;
 extern crate proj_crypto;
 extern crate proj_net;
@@ -183,7 +185,8 @@ fn main() {
             String::from(DEFAULT_LAN_SOCKET_ADDR)
         };
 
-        println!("I am a happy meter on {}", lan_socket);
+        let mut shell = shell::InteractiveShell::new("meter", ());
+        shell.start();
         return;
     }
 
