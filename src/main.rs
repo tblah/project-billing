@@ -30,6 +30,7 @@ use std::net::{TcpListener, TcpStream};
 use std::path::Path;
 use std::process::exit;
 use proj_billing::billing::Keys;
+use proj_billing::billing::consumption::integer_consumption::IntegerConsumption;
 
 const DEFAULT_WAN_SOCKET_ADDR: &'static str = "127.0.0.1:1025";
 const DEFAULT_LAN_SOCKET_ADDR: &'static str = "127.0.0.1:1026";
@@ -241,6 +242,40 @@ fn start_meter(dhparams_path: String, sign_key_path: String, lan_socket_path: St
     let meter = MeterState::new(channel, sk, dh_params);
 
     let mut shell = shell::InteractiveShell::new("meter", meter);
+
+    // consume command
+    fn consume(meter: &mut MeterState<TcpStream>, args: Vec<String>) {
+        if args.len() != 2 {
+            println!("There should be two integer arguments to this command: cons and other");
+            return;
+        }
+
+        let cons: i32 = match args[0].parse() {
+            Ok(c) => c,
+            Err(_) => {
+                println!("Error parsing cons. It should be a 32 bit signed integer.");
+                return;
+            },
+        };
+
+        let other: u8 = match args[1].parse() {
+            Ok(o) => o,
+            Err(_) => {
+                println!("Error parsing other. It should be a unsigned integer lower than 168");
+                return;
+            },
+        };
+
+        if other >= 168 {
+            println!("Other should be lower than 168 (it is an hour in a week)");
+            return;
+        }
+
+        meter.consume(&IntegerConsumption{ hour_of_week: other, units_consumed: cons });
+    }
+
+    shell.register_command("consume", "consume CONS OTHER", "Consumer CONS units at time OTHER", Box::new(consume));
+    
     shell.start();
 }
 
@@ -270,15 +305,49 @@ fn start_customer(dhparams_path: String, private_coms_key_path: String, public_c
     };
 
     // start crypto with provider
-    let mut client = match client::start(wan_socket.as_str(), coms_keys, &coms_pks) {
+    let client = match client::start(wan_socket.as_str(), coms_keys, &coms_pks) {
         Err(e) => panic!("Client failed to start with error {:?}", e),
         Ok(c) => c,
     };
-    client.blocking_off(1);
+    //client.blocking_off(1);
+
+    let meter_stream = listener.incoming().next().unwrap().unwrap();
+    meter_stream.set_nonblocking(true).expect("set_nonblocking call in start_customer failed");
     
-    let customer = CustomerState::new(listener.incoming().next().unwrap().unwrap(), client, [1; 24*7], provider_sign_pk, meter_sign_pk, dh_params);
+    let customer = CustomerState::new(meter_stream, client, [1; 24*7], provider_sign_pk, meter_sign_pk, dh_params);
 
     let mut shell = shell::InteractiveShell::new("customer", customer);
+
+    // shell commands
+    fn get_consumption(customer: &mut CustomerState<client::Client, TcpStream>, args: Vec<String>) {
+        shell::complain_arg(&args);
+        customer.read_meter_messages();
+    }
+
+    shell.register_command("get_cons", "get_cons", "Receive consumption messages from the smartmeter", Box::new(get_consumption));
+
+    fn get_prices(customer: &mut CustomerState<client::Client, TcpStream>, args: Vec<String>) {
+        shell::complain_arg(&args);
+        customer.read_provider_messages();
+    }
+
+    shell.register_command("get_prices", "get_prices", "Receive new prices from the provider", Box::new(get_prices));
+
+    fn send_bill(customer: &mut CustomerState<client::Client, TcpStream>, args: Vec<String>) {
+        shell::complain_arg(&args);
+        customer.send_billing_information();
+    }
+
+    shell.register_command("send_bill", "send_bill", "Send the bill and proof to the provider", Box::new(send_bill));
+    
+    fn cons_table(customer: &mut CustomerState<client::Client, TcpStream>, args: Vec<String>) {
+        shell::complain_arg(&args);
+        customer.read_meter_messages();
+        println!("{}", customer.readable_consumption_table());
+    }
+
+    shell.register_command("cons_table", "cons_table", "Display the state of the consumption table", Box::new(cons_table));
+
     shell.start();
 }
 
@@ -307,12 +376,23 @@ fn start_provider(dhparams_path: String, private_coms_key_path: String, public_c
     };
 
     // begin crypto on first connection
-    let mut server = server::do_key_exchange(listener.incoming().next().unwrap(), &coms_keys, &coms_pks).unwrap();
-    server.blocking_off(1);
+    let server = server::do_key_exchange(listener.incoming().next().unwrap(), &coms_keys, &coms_pks).unwrap();
+    //server.blocking_off(1);
 
     // begin billing protocol layer
     let provider = ProviderState::new(server, [1; 7*24], Keys{ my_sk: sign_sk, their_pk: sign_pk }, dh_params);
 
     let mut shell = shell::InteractiveShell::new("provider", provider);
+
+    // shell commands
+    fn get_bill(provider: &mut ProviderState<server::Server>, args: Vec<String>) {
+        shell::complain_arg(&args);
+        provider.receive_billing_information();
+
+        println!("The bill is {}", provider.pay_bill());
+    }
+
+    shell.register_command("get_bill", "get_bill", "Receive billing information from the customer and check that was calculated honestly", Box::new(get_bill));
+
     shell.start();
 }

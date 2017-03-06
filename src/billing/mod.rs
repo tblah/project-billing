@@ -225,6 +225,7 @@ mod tests {
         };
 
         let stream = stream_option.unwrap(); // drop mutability, panics if we couldn't connect to the stream
+        stream.set_read_timeout(Some(Duration::from_millis(100))).unwrap();
 
         stream.set_nonblocking(true).unwrap();
 

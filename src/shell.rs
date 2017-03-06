@@ -30,6 +30,12 @@ pub struct InteractiveShell<T> where T: 'static {
     commands: HashMap<String, CommandInfo<T>>,
 }
 
+pub fn complain_arg(arg: &Vec<String>) {
+    if !(arg.is_empty()) {
+        println!("This command did not require an argument");
+    }
+}
+
 impl<T> InteractiveShell<T> {
     pub fn new<S: ToString>(my_name: S, shared_state: T) -> Self {
         InteractiveShell {
@@ -52,12 +58,6 @@ impl<T> InteractiveShell<T> {
     }
 
     pub fn start(&mut self) -> ! {
-        fn complain_arg<T>(arg: &Vec<T>) {
-            if !(arg.is_empty()) {
-                println!("This command did not require an argument");
-            }
-        }
-
         // common commands
         fn exit_command<T>(shared: &mut T, args: Vec<String>) {
             complain_arg(&args);
@@ -81,9 +81,9 @@ impl<T> InteractiveShell<T> {
             let _ = shared; // suppress unused warning (#[ignore()] does not seem to work on closures)
             complain_arg(&args);
             println!("Usage:");
-            println!("Command\t\tDescription\n");
+            println!("Command\t\t\tDescription\n");
             for (name, help) in help_info.iter() {
-                println!("{}\t\t{}", name, help);
+                println!("{}\t\t\t{}", name, help);
             }
         };
 

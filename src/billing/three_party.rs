@@ -28,6 +28,8 @@ use proj_crypto::asymmetric::{sign, commitments};
 use gmp::mpz::Mpz;
 use std::io;
 use std::path::Path;
+use std::io::BufReader;
+use std::io::BufRead;
 
 /// The default file to store diffie-hellman parameters in
 pub static DEFAULT_PARAMS_PATH: &'static str = "dhparams.txt";
@@ -78,7 +80,6 @@ fn read_up_to_newline<R: Read>(source: &mut io::Bytes<R>) -> Vec<u8> {
     let mut iterator = source.map(|x| x.unwrap());
 
     let ret: Vec<u8> = iterator.by_ref().take_while(|x| *x != b'\n').collect();
-    //assert_eq!(b'\n', iterator.next().unwrap()); // get rid of the separating \n
 
     ret
 }
@@ -115,41 +116,54 @@ fn meter_consume<W: Write>(params: &commitments::DHParams, sk: &sign::SecretKey,
 // separate function so that I can test it more easily
 fn customer_read_consumption<R: Read>(channel: &mut R, meter_key: &sign::PublicKey, table: &mut Vec<ConsumptionTableRow>) {
     // read the two newline separated stringified signatures
-    let mut iterator = channel.bytes();
+    let buf = BufReader::new(channel);
+    let mut lines = buf.lines();
 
-    // read touple str
-    let touple_str = String::from_utf8(read_up_to_newline(&mut iterator)).unwrap();
-
-    // read the signed commitment
-    let signed_commitment_str_bytes = read_up_to_newline(&mut iterator);
-    let signed_commitment_other = unstringify_bytes(&String::from_utf8(signed_commitment_str_bytes.clone()).unwrap());
-
-    // verify the signature on the commitment
-    let commitment_other_bytes = sign::verify(&signed_commitment_other, meter_key).unwrap();
-    let commit_other_str = String::from_utf8(commitment_other_bytes).unwrap();
-    let mut commit_other_iter = commit_other_str.split_whitespace();
-    let _ = commit_other_iter.next().unwrap();
-    let other_str = commit_other_iter.next().unwrap();
-    assert_eq!(None, commit_other_iter.next());
-
-    // touple looks like "cons a"
-    let mut touple_iter = touple_str.split_whitespace();
-    let cons_str = touple_iter.next().unwrap();
-    let a_str = touple_iter.next().unwrap();
-    assert_eq!(None, touple_iter.next());
-
-    let cons = i32::from_str_radix(&cons_str, 10).unwrap();
-    let other = u8::from_str_radix(&other_str, 10).unwrap();
-    let a = Mpz::from_str_radix(&a_str, 16).unwrap();
-
-    let table_row = ConsumptionTableRow {
-        signed_commitment: String::from_utf8(signed_commitment_str_bytes).unwrap(),
-        cons: cons,
-        other: other,
-        a: a,
-    };
+    loop {
+        // read touple str
+        //let touple_str = String::from_utf8(read_up_to_newline(&mut iterator)).unwrap();
+        let touple_str = match lines.next() {
+            Some(opt) => {
+                match opt {
+                    Ok(s) => s,
+                    Err(_) => return, // some readers give an empty string instead of a None when there is nothing to read
+                }
+            },
+            None => return,
+        };
         
-    table.push(table_row);
+        // read the signed commitment
+        let signed_commitment_str = lines.next().unwrap().unwrap();
+        let signed_commitment_other = unstringify_bytes(&signed_commitment_str);
+    
+        // verify the signature on the commitment
+        let commitment_other_bytes = sign::verify(&signed_commitment_other, meter_key).unwrap();
+        let commit_other_str = String::from_utf8(commitment_other_bytes).unwrap();
+        let mut commit_other_iter = commit_other_str.split_whitespace();
+        let _ = commit_other_iter.next().unwrap();
+        let other_str = commit_other_iter.next().unwrap();
+        assert_eq!(None, commit_other_iter.next());
+    
+        // touple looks like "cons a"
+        let mut touple_iter = touple_str.split_whitespace();
+        let cons_str = touple_iter.next().unwrap();
+        let a_str = touple_iter.next().unwrap();
+        assert_eq!(None, touple_iter.next());
+    
+        let cons = i32::from_str_radix(&cons_str, 10).unwrap();
+        let other = u8::from_str_radix(&other_str, 10).unwrap();
+        let a = Mpz::from_str_radix(&a_str, 16).unwrap();
+    
+        let table_row = ConsumptionTableRow {
+            //signed_commitment: String::from_utf8(signed_commitment_str_bytes).unwrap(),
+            signed_commitment: signed_commitment_str,
+            cons: cons,
+            other: other,
+            a: a,
+        };
+            
+        table.push(table_row);
+    }
 }
     
 impl<T: Read + Write> MeterState<T> {
@@ -211,11 +225,26 @@ impl<P: Read + Write, M: Read + Write> CustomerState<P, M> {
         }
     }
 
+    /// For debugging and logging: outputs a human readable representation of the cons and other fields of the consumption table
+    pub fn readable_consumption_table(&self) -> String {
+        let mut out = String::new();
+        for row in &self.consumption_table {
+            let row = format!("cons: {}, other: {}\n", row.cons, row.other);
+            out = out + row.as_str();
+        }
+        out
+    }
+
     /// Calculate the bill and send it to the provider
     pub fn send_billing_information(&mut self) {
         // calculate what we think that the bill will be and what we expect a to be
         let mut bill = 0 as i64;
         let mut a = Mpz::zero();
+
+        // do nothing if there is no bill to send
+        if self.consumption_table.len() == 0 {
+            return;
+        }
 
         for row in &self.consumption_table {
             bill += row.cons as i64 * self.prices[row.other as usize] as i64;
@@ -295,7 +324,8 @@ impl<T: Read + Write> ProviderState<T> {
 
     /// receive new billing information
     pub fn receive_billing_information(&mut self) {
-        let mut iterator = Read::by_ref(&mut self.channel).bytes();
+        let buf = BufReader::new(&mut self.channel);
+        let mut iterator = buf.bytes();
 
         // get the fixed-length part
         let bill_bytes = read_up_to_newline(&mut iterator);
@@ -512,7 +542,9 @@ pub mod tests {
             let connector = thread::spawn(connect_thread);
     
             let stream1 = listener.accept().unwrap().0;
+            stream1.set_nonblocking(true).unwrap();
             let stream2 = connector.join().unwrap();
+            stream2.set_nonblocking(true).unwrap();
     
             let params = read_or_gen_params(DEFAULT_PARAMS_PATH);
             
