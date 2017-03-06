@@ -51,7 +51,7 @@ impl<T> InteractiveShell<T> {
         self.commands.insert(name.to_string(), info);
     }
 
-    pub fn start(&mut self) {
+    pub fn start(&mut self) -> ! {
         fn complain_arg<T>(arg: &Vec<T>) {
             if !(arg.is_empty()) {
                 println!("This command did not require an argument");
