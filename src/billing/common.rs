@@ -11,13 +11,13 @@
     GNU General Public License for more details.
     You should have received a copy of the GNU General Public License
     along with project-billing.  If not, see http://www.gnu.org/licenses/.*/
-
+use num::cast::NumCast;
 use proj_crypto::asymmetric::sign;
 use std::io::{Read, Write, ErrorKind};
 use super::consumption::Consumption;
 
 // only works for 4-byte wide Cons (see the transmute)
-pub fn check_for_new_prices<T: Read + Write, Cons: Sized, C: Consumption<Cons, u8>>(channel: &mut T, their_pk: &sign::PublicKey) -> Option<C::Prices> {
+pub fn check_for_new_prices<T: Read + Write, Cons: Sized, Other: NumCast, C: Consumption<Cons, Other>>(channel: &mut T, their_pk: &sign::PublicKey) -> Option<C::Prices> {
     const BUF_LEN: usize = 4 * 7 * 24 + sign::SIGNATUREBYTES; // size_of apparently doesn't do constants
     let mut buf: [u8; BUF_LEN] = [0; BUF_LEN];
     let mut ret = None;
@@ -47,7 +47,7 @@ pub fn check_for_new_prices<T: Read + Write, Cons: Sized, C: Consumption<Cons, u
             }
 
             let new_price = C::cons_from_bytes(&these_bytes);
-            C::set_price(&mut new_prices, i as u8, new_price);
+            C::set_price(&mut new_prices, Other::from(i).unwrap(), new_price);
         }
 
         ret = Some(new_prices);
@@ -56,7 +56,7 @@ pub fn check_for_new_prices<T: Read + Write, Cons: Sized, C: Consumption<Cons, u
     ret
 }
 
-pub fn change_prices<T: Read + Write, Cons, C: Consumption<Cons, u8>>(channel: &mut T, sk: &sign::SecretKey, prices: &C::Prices) {
+pub fn change_prices<T: Write, Cons, Other, C: Consumption<Cons, Other>>(channel: &mut T, sk: &sign::SecretKey, prices: &C::Prices) {
     let buf = C::prices_to_bytes(prices);
 
     let sbuf = sign::sign(&buf, sk);

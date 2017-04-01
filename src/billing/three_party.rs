@@ -30,6 +30,7 @@ use std::io;
 use std::path::Path;
 use std::io::BufReader;
 use std::io::BufRead;
+use std::iter::Iterator;
 
 /// The default file to store diffie-hellman parameters in
 pub static DEFAULT_PARAMS_PATH: &'static str = "dhparams.txt";
@@ -77,11 +78,25 @@ fn unstringify_bytes(string: &str) -> Vec<u8> {
 }
 
 fn read_up_to_newline<R: Read>(source: &mut io::Bytes<R>) -> Vec<u8> {
-    let mut iterator = source.map(|x| x.unwrap());
+    //let mut iterator = source.map(|x| x.unwrap());
 
-    let ret: Vec<u8> = iterator.by_ref().take_while(|x| *x != b'\n').collect();
+    let mut ret: Vec<u8> = Vec::new();
+    for result in source {
+        let byte = match result {
+            Ok(b) => b,
+            Err(_) => { let ret_clone = ret.clone(); panic!("Error unwrapping in read_up_to_newline. Input up to now was {:?} => {:?}", ret_clone, String::from_utf8(ret)) },
+        };
 
-    ret
+        if byte == b'\n' {
+            return ret;
+        }
+        
+        ret.push(byte);
+    }
+
+    //let ret: Vec<u8> = iterator.by_ref().take_while(|x| *x != b'\n').collect();
+
+    panic!("left read_up_to_newline loop without finding a newline. ret = {:?}. If you are running the automated test then the client is probably not keeping up with this thread. Increase the thread sleep. Rust lies about the infinite read timeout.", ret);
 }
 
 // separate function so I can test it more easily
@@ -121,7 +136,6 @@ fn customer_read_consumption<R: Read>(channel: &mut R, meter_key: &sign::PublicK
 
     loop {
         // read touple str
-        //let touple_str = String::from_utf8(read_up_to_newline(&mut iterator)).unwrap();
         let touple_str = match lines.next() {
             Some(opt) => {
                 match opt {
@@ -151,7 +165,7 @@ fn customer_read_consumption<R: Read>(channel: &mut R, meter_key: &sign::PublicK
         assert_eq!(None, touple_iter.next());
     
         let cons = i32::from_str_radix(&cons_str, 10).unwrap();
-        let other = u8::from_str_radix(&other_str, 10).unwrap();
+        let other = u64::from_str_radix(&other_str, 10).unwrap();
         let a = Mpz::from_str_radix(&a_str, 16).unwrap();
     
         let table_row = ConsumptionTableRow {
@@ -186,7 +200,7 @@ impl<T: Read + Write> MeterState<T> {
 struct ConsumptionTableRow {
     signed_commitment: String,
     cons: i32,
-    other: u8,
+    other: u64,
     a: Mpz,
 }
 
@@ -243,12 +257,14 @@ impl<P: Read + Write, M: Read + Write> CustomerState<P, M> {
 
         // do nothing if there is no bill to send
         if self.consumption_table.len() == 0 {
+            println!("I can't bill an empty consumption table!");
             return 0;
         }
 
         for row in &self.consumption_table {
-            bill += row.cons as i64 * self.prices[row.other as usize] as i64;
-            a = (a + row.a.clone() * self.prices[row.other as usize] as i64).modulus(&self.params.0);
+            let price = self.prices[(row.other % (24*7)) as usize] as i64;
+            bill += row.cons as i64 * price;
+            a = (a + row.a.clone() * price).modulus(&self.params.0);
         }
 
         // Message format: "bill\na\ntable.len()\ntable[0]\n...\n\table[N]\n"
@@ -270,6 +286,10 @@ impl<P: Read + Write, M: Read + Write> CustomerState<P, M> {
             };
         }
 
+        //println!("consumption table = {}", self.readable_consumption_table());
+        //println!("prices = {:?}", self.prices.as_ref());
+        //println!("bill = {}", bill);
+
         // empty the table
         self.consumption_table.clear();
         bill
@@ -283,7 +303,7 @@ impl<P: Read + Write, M: Read + Write> CustomerState<P, M> {
     /// check for price changes from the provider
     pub fn read_provider_messages(&mut self) {
         // check for new prices information
-        if let Some(new_prices) = common::check_for_new_prices::<P, i32, IntegerConsumption>(&mut self.provider_channel, &self.provider_key) {
+        if let Some(new_prices) = common::check_for_new_prices::<P, i32, u64, IntegerConsumption>(&mut self.provider_channel, &self.provider_key) {
             self.prices = new_prices;
         }
     }
@@ -329,9 +349,13 @@ impl<T: Read + Write> ProviderState<T> {
         let mut iterator = buf.bytes();
 
         // get the fixed-length part
+        //println!("reading bill");
         let bill_bytes = read_up_to_newline(&mut iterator);
+        //println!("bill_bytes is {:?}", bill_bytes);
         let a_bytes = read_up_to_newline(&mut iterator);
+        //println!("a bytes is {:?}", a_bytes);
         let length_bytes = read_up_to_newline(&mut iterator);
+        //println!("length_bytes is {:?}", String::from_utf8(length_bytes.clone()));
 
         let bill = i64::from_str_radix(&String::from_utf8(bill_bytes).unwrap(), 10).unwrap();
         let a = Mpz::from_str_radix(&String::from_utf8(a_bytes).unwrap(), 16).unwrap();
@@ -360,7 +384,7 @@ impl<T: Read + Write> ProviderState<T> {
             let commitment = Mpz::from_str_radix(&commit_str, 16).unwrap();
             commitments.push(commitments::Commitment::from_parts(commitment, self.params.0.clone(), false).unwrap());
 
-            let other = usize::from_str_radix(&other_str, 10).unwrap();
+            let other = u64::from_str_radix(&other_str, 10).unwrap();
             others.push(other);
         }
 
@@ -368,9 +392,9 @@ impl<T: Read + Write> ProviderState<T> {
         let expected_commit = commitments::CommitmentContext::from_opening(
             (Mpz::from(bill), a), self.params.clone()).unwrap().to_commitment();
 
-        let mut calculated_commit = commitments[0].clone() * Mpz::from(self.prices[others[0]]);
+        let mut calculated_commit = commitments[0].clone() * Mpz::from(self.prices[(others[0] % (24*7)) as usize]);
         for i in 1..length {
-            calculated_commit = calculated_commit + (commitments[i].clone() * Mpz::from(self.prices[others[i]]));
+            calculated_commit = calculated_commit + (commitments[i].clone() * Mpz::from(self.prices[(others[i] % (24*7)) as usize]));
         }
 
         assert!(expected_commit == calculated_commit);
@@ -382,7 +406,7 @@ impl<T: Read + Write> ProviderState<T> {
     /// Store and send the new prices to the customer. Does not check if the prices have actually changed before sending.
     pub fn change_prices(&mut self, prices: &Prices) {
         // send them
-        common::change_prices::<T, i32, IntegerConsumption>(&mut self.channel, &self.keys.my_sk, prices);
+        common::change_prices::<T, i32, u64, IntegerConsumption>(&mut self.channel, &self.keys.my_sk, prices);
 
         // store the prices 
         self.prices = *prices;
@@ -417,8 +441,7 @@ pub mod tests {
 
         // random consumption to send
         let units = super::super::tests::random_positive_i32();
-        //println!("Testing cons is {}", units);
-        let hour = random_hour_of_week();
+        let hour = random_hour_of_week() as u64;
         let consumption = IntegerConsumption::new(units, hour);
 
         // channel along which to send data
@@ -461,33 +484,29 @@ pub mod tests {
         }
     
         fn consume(&mut self, consumption: &Self::Consumption) {
-            //println!("begin consume");
             // assert we are a Client
             let (ref mut meter, ref mut customer) = match self.role {
                 Role::Client(ref mut m, ref mut c) => (m, c),
                 _ => panic!("This function should be called on the Client"),
             };
     
-            customer.read_provider_messages();
+            //customer.read_provider_messages();
             meter.consume(consumption);
             customer.read_meter_messages();
-            //println!("end consume");
         }
     
         fn send_billing_information(&mut self) {
-            //println!("begin send_billing_info");
             // assert we are a Client
             let ref mut customer = match self.role {
                 Role::Client(_, ref mut c) => c,
                 _ => panic!("This function should be called on the Client"),
             };
     
+            customer.read_provider_messages();
             customer.send_billing_information();
-            //println!("end send billing info");
         }
     
         fn pay_bill(&mut self) -> i64 {
-            //println!("begin pay_bill");
             // assert we are a Server
             let ref mut provider = match self.role {
                 Role::Server(ref mut s) => s,
@@ -495,13 +514,11 @@ pub mod tests {
             };
     
             provider.receive_billing_information();
-            //println!("end pay bill");
             provider.pay_bill()
         }
     
     
         fn change_prices(&mut self, prices: &Prices) {
-            //println!("begin change prices");
             // assert we are a Server
             let ref mut provider = match self.role {
                 Role::Server(ref mut s) => s,
@@ -509,7 +526,6 @@ pub mod tests {
             };       
     
             provider.change_prices(prices);
-            //println!("end change prices");
         }
     
         fn new_meter(provider_channel: T, prices: &Prices, keys: super::super::MeterKeys) -> ThreeParty<T> {

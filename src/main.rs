@@ -258,18 +258,13 @@ fn start_meter(dhparams_path: String, sign_key_path: String, lan_socket_path: St
             },
         };
 
-        let other: u8 = match args[1].parse() {
+        let other: u64 = match args[1].parse() {
             Ok(o) => o,
             Err(_) => {
-                println!("Error parsing other. It should be a unsigned integer lower than 168");
+                println!("Error parsing other. It should be a unsigned integer");
                 return;
             },
         };
-
-        if other >= 168 {
-            println!("Other should be lower than 168 (it is an hour in a week)");
-            return;
-        }
 
         meter.consume(&IntegerConsumption{ hour_of_week: other, units_consumed: cons });
     }

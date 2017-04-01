@@ -25,21 +25,16 @@ pub type Prices = [i32; 24*7];
 #[derive(Debug)]
 pub struct IntegerConsumption {
     /// The hour in the week: e.g. 7am on a Tuesday would be 24+7 hours.
-    pub hour_of_week: u8,
+    pub hour_of_week: u64,
     /// The number of units of the utility which were consumed in the last hour
     pub units_consumed: i32,
 }
 
-impl Consumption<i32, u8> for IntegerConsumption {
+impl Consumption<i32, u64> for IntegerConsumption {
     type Prices = Prices;
     
     /// Checks that the values stored in a Consumption object are legal
     fn is_valid(&self) -> bool {
-        if self.hour_of_week > ((24 * 7) - 1) {
-            println!("Invalid consumption: Hour of week");
-            return false;
-        }
-
         if self.units_consumed < 0 {
             println!("invalid consumption: cons = {}", self.units_consumed);
             return false;
@@ -49,7 +44,7 @@ impl Consumption<i32, u8> for IntegerConsumption {
     }
 
     /// Instance new consumption
-    fn new(cons: i32, other: u8) -> IntegerConsumption {
+    fn new(cons: i32, other: u64) -> IntegerConsumption {
         let ret = IntegerConsumption {
             hour_of_week: other,
             units_consumed: cons,
@@ -62,9 +57,9 @@ impl Consumption<i32, u8> for IntegerConsumption {
 
     fn null_prices() -> Prices { [0; 24*7] }
 
-    fn set_price(prices: &mut Prices, other: u8, price: i32) { prices[other as usize] = price }
+    fn set_price(prices: &mut Prices, other: u64, price: i32) { prices[(other % (24*7)) as usize] = price }
 
-    fn get_price(prices: &Prices, other: u8) -> i32 { prices[other as usize] }
+    fn get_price(prices: &Prices, other: u64) -> i32 { prices[(other % (24*7)) as usize] }
 
     fn prices_len() -> usize {24*7}
 

@@ -200,10 +200,14 @@ mod tests {
     fn server_thread<B, T: BillingProtocol<UnixStream, B>, P: AsRef<Path>>(keys: super::Keys, prices: T::Prices, path: P) -> B {
         let listener = UnixListener::bind(path).unwrap();
         let (stream, _) = listener.accept().unwrap(); // wait for a connection from the client
+        stream.set_nonblocking(false).unwrap();
+        stream.set_read_timeout(None).unwrap(); // block indefinitely
 
         let mut server = T::new_server(stream, keys, &prices);
+        thread::sleep(Duration::from_millis(10));
         
         server.change_prices(&prices);
+        thread::sleep(Duration::from_millis(10));
 
         server.pay_bill()
     }
@@ -225,9 +229,9 @@ mod tests {
         };
 
         let stream = stream_option.unwrap(); // drop mutability, panics if we couldn't connect to the stream
-        stream.set_read_timeout(Some(Duration::from_millis(100))).unwrap();
-
         stream.set_nonblocking(true).unwrap();
+
+        stream.set_read_timeout(None).unwrap();
 
         let ref prices = &T::null_prices();
 
@@ -347,7 +351,7 @@ mod tests {
     #[test]
     fn three_party() {
         sodiumoxide::init();
-        let num_cons = randombytes::randombytes(1)[0] >> 5;
+        let num_cons = 1 + randombytes::randombytes(1)[0] % 9;
 
         let mut prices = [0 as i32; 24*7];
 
@@ -360,7 +364,7 @@ mod tests {
 
         for _ in 0..num_cons {
             let units = random_positive_i32() >> 20; // make it smaller so we don't overflow the bill
-            let hour = random_hour_of_week();
+            let hour = random_hour_of_week() as u64;
 
             let cons = <ThreeParty<UnixStream> as BillingProtocol<UnixStream, i64>>::Consumption::new(units, hour);
             consumption.push_back(cons);

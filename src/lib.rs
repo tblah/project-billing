@@ -29,5 +29,6 @@ extern crate proj_net;
 extern crate proj_crypto;
 extern crate sodiumoxide;
 extern crate gmp;
+extern crate num;
 
 pub mod billing;

@@ -14,6 +14,7 @@ proj_crypto = { git = "https://github.com/tblah/project-crypto" }
 sodiumoxide = "0.0.12"
 rust-gmp = {git = "https://github.com/fizyk20/rust-gmp", rev = "f3e0a8962206ecf7d21ac7d0a9635c7eff5ce7ff"}
 getopts = "0.2"
+num = "0.1.37"
 
 [[bin]]
 name = "interactive-demo"

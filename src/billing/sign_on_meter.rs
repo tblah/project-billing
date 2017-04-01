@@ -59,7 +59,7 @@ impl<T: Read + Write> BillingProtocol<T, f64> for SignOnMeter<T> {
         assert!(consumption.is_valid());
 
         // check for new prices information
-        if let Some(new_prices) = common::check_for_new_prices::<T, f32, FloatingConsumption>(&mut self.channel, &self.keys.their_pk) {
+        if let Some(new_prices) = common::check_for_new_prices::<T, f32, u8, FloatingConsumption>(&mut self.channel, &self.keys.their_pk) {
             self.prices = new_prices;
         }
 
@@ -128,7 +128,7 @@ impl<T: Read + Write> BillingProtocol<T, f64> for SignOnMeter<T> {
     fn change_prices(&mut self, prices: &Self::Prices) {
         assert!(self.role == Role::Server);
 
-        common::change_prices::<T, f32, FloatingConsumption>(&mut self.channel, &self.keys.my_sk, prices);
+        common::change_prices::<T, f32, u8, FloatingConsumption>(&mut self.channel, &self.keys.my_sk, prices);
     }
 
     fn new_meter(channel: T, prices: &Prices, meter_keys: super::MeterKeys) -> SignOnMeter<T> {
