@@ -47,12 +47,35 @@
                    <a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">
                        [<span class='inner'>&#x2212;</span>]
                    </a>
-               </span><a class='srclink' href='../../../src/proj_crypto/asymmetric/sign.rs.html#1-17' title='goto source code'>[src]</a></span></h1>
+               </span><a class='srclink' href='../../../src/proj_crypto/asymmetric/sign.rs.html#1-207' title='goto source code'>[src]</a></span></h1>
 <div class='docblock'><p>Public Key Signatures</p>
 
 <p>Just re-exports of sodiumoxide</p>
 </div><h2 id='reexports' class='section-header'><a href="#reexports">Reexports</a></h2>
-<table><tr><td><code>pub use sodiumoxide::crypto::sign::<a class='mod' href='../../../sodiumoxide/crypto/sign/ed25519/index.html' title='sodiumoxide::crypto::sign::ed25519'>ed25519</a>::*;</code></td></tr></table></section>
+<table><tr><td><code>pub use sodiumoxide::crypto::sign::<a class='mod' href='../../../sodiumoxide/crypto/sign/ed25519/index.html' title='sodiumoxide::crypto::sign::ed25519'>ed25519</a>::*;</code></td></tr></table><h2 id='functions' class='section-header'><a href="#functions">Functions</a></h2>
+<table>
+                       <tr class=' module-item'>
+                           <td><a class='fn' href='fn.get_keypair.html'
+                                  title='proj_crypto::asymmetric::sign::get_keypair'>get_keypair</a></td>
+                           <td class='docblock-short'>
+                                <p>Reads keys from a file. Returns (my_pk, my_sk)</p>
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class='fn' href='fn.get_pubkey.html'
+                                  title='proj_crypto::asymmetric::sign::get_pubkey'>get_pubkey</a></td>
+                           <td class='docblock-short'>
+                                <p>Reads a public key from a file</p>
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class='fn' href='fn.key_gen_to_file.html'
+                                  title='proj_crypto::asymmetric::sign::key_gen_to_file'>key_gen_to_file</a></td>
+                           <td class='docblock-short'>
+                                <p>Generate a keypair and put it into the specified file
+This is not memory tidy. It would be difficult to clear the memory properly here and I don&#39;t think it matters too much because this doesn&#39;t connect to the network</p>
+                           </td>
+                       </tr></table></section>
     <section id='search' class="content hidden"></section>
 
     <section class="footer"></section>

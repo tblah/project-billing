@@ -1,1 +1,1 @@
-initSidebarItems({"struct":[["Mpz",""],["mpz_struct",""]],"type":[["mp_bitcnt_t",""],["mp_limb_t",""],["mpz_ptr",""],["mpz_srcptr",""]]});
+initSidebarItems({"enum":[["ProbabPrimeResult","The result of running probab_prime"]],"struct":[["Mpz",""],["ParseMpzError",""],["mpz_struct",""]],"type":[["mp_bitcnt_t",""],["mp_limb_t",""],["mpz_ptr",""],["mpz_srcptr",""]]});

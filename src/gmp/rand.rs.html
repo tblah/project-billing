@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="generator" content="rustdoc">
-    <meta name="description" content="Source to the Rust file `/home/lain/.cargo/registry/src/github.com-1ecc6299db9ec823/gmp-0.3.1/src/rand.rs`.">
+    <meta name="description" content="Source to the Rust file `/home/lain/.cargo/git/checkouts/rust-gmp-2c37f9427473920f/f3e0a89/src/rand.rs`.">
     <meta name="keywords" content="rust, rustlang, rust-lang">
 
     <title>rand.rs.html -- source</title>
@@ -148,6 +148,9 @@
 <span id="104">104</span>
 <span id="105">105</span>
 <span id="106">106</span>
+<span id="107">107</span>
+<span id="108">108</span>
+<span id="109">109</span>
 </pre><pre class='rust '>
 <span class='kw'>use</span> <span class='ident'>libc</span>::{<span class='ident'>c_int</span>, <span class='ident'>c_ulong</span>, <span class='ident'>c_void</span>};
 <span class='kw'>use</span> <span class='kw'>super</span>::<span class='ident'>mpz</span>::{<span class='ident'>mpz_struct</span>, <span class='ident'>Mpz</span>, <span class='ident'>mpz_ptr</span>, <span class='ident'>mpz_srcptr</span>, <span class='ident'>mp_bitcnt_t</span>};
@@ -179,6 +182,9 @@
 <span class='kw'>pub</span> <span class='kw'>struct</span> <span class='ident'>RandState</span> {
     <span class='ident'>state</span>: <span class='ident'>gmp_randstate_struct</span>,
 }
+
+<span class='kw'>unsafe</span> <span class='kw'>impl</span> <span class='ident'>Send</span> <span class='kw'>for</span> <span class='ident'>RandState</span> { }
+<span class='kw'>unsafe</span> <span class='kw'>impl</span> <span class='ident'>Sync</span> <span class='kw'>for</span> <span class='ident'>RandState</span> { }
 
 <span class='kw'>impl</span> <span class='ident'>Drop</span> <span class='kw'>for</span> <span class='ident'>RandState</span> {
     <span class='kw'>fn</span> <span class='ident'>drop</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='self'>self</span>) {

@@ -589,6 +589,55 @@
 <span id="545">545</span>
 <span id="546">546</span>
 <span id="547">547</span>
+<span id="548">548</span>
+<span id="549">549</span>
+<span id="550">550</span>
+<span id="551">551</span>
+<span id="552">552</span>
+<span id="553">553</span>
+<span id="554">554</span>
+<span id="555">555</span>
+<span id="556">556</span>
+<span id="557">557</span>
+<span id="558">558</span>
+<span id="559">559</span>
+<span id="560">560</span>
+<span id="561">561</span>
+<span id="562">562</span>
+<span id="563">563</span>
+<span id="564">564</span>
+<span id="565">565</span>
+<span id="566">566</span>
+<span id="567">567</span>
+<span id="568">568</span>
+<span id="569">569</span>
+<span id="570">570</span>
+<span id="571">571</span>
+<span id="572">572</span>
+<span id="573">573</span>
+<span id="574">574</span>
+<span id="575">575</span>
+<span id="576">576</span>
+<span id="577">577</span>
+<span id="578">578</span>
+<span id="579">579</span>
+<span id="580">580</span>
+<span id="581">581</span>
+<span id="582">582</span>
+<span id="583">583</span>
+<span id="584">584</span>
+<span id="585">585</span>
+<span id="586">586</span>
+<span id="587">587</span>
+<span id="588">588</span>
+<span id="589">589</span>
+<span id="590">590</span>
+<span id="591">591</span>
+<span id="592">592</span>
+<span id="593">593</span>
+<span id="594">594</span>
+<span id="595">595</span>
+<span id="596">596</span>
 </pre><pre class='rust '>
 <span class='doccomment'>//! # Three Party Billing Scheme</span>
 <span class='doccomment'>//!</span>
@@ -620,6 +669,9 @@
 <span class='kw'>use</span> <span class='ident'>gmp</span>::<span class='ident'>mpz</span>::<span class='ident'>Mpz</span>;
 <span class='kw'>use</span> <span class='ident'>std</span>::<span class='ident'>io</span>;
 <span class='kw'>use</span> <span class='ident'>std</span>::<span class='ident'>path</span>::<span class='ident'>Path</span>;
+<span class='kw'>use</span> <span class='ident'>std</span>::<span class='ident'>io</span>::<span class='ident'>BufReader</span>;
+<span class='kw'>use</span> <span class='ident'>std</span>::<span class='ident'>io</span>::<span class='ident'>BufRead</span>;
+<span class='kw'>use</span> <span class='ident'>std</span>::<span class='ident'>iter</span>::<span class='ident'>Iterator</span>;
 
 <span class='doccomment'>/// The default file to store diffie-hellman parameters in</span>
 <span class='kw'>pub</span> <span class='kw'>static</span> <span class='ident'>DEFAULT_PARAMS_PATH</span>: <span class='kw-2'>&amp;</span><span class='lifetime'>&#39;static</span> <span class='ident'>str</span> <span class='op'>=</span> <span class='string'>&quot;dhparams.txt&quot;</span>;
@@ -667,12 +719,25 @@
 }
 
 <span class='kw'>fn</span> <span class='ident'>read_up_to_newline</span><span class='op'>&lt;</span><span class='ident'>R</span>: <span class='ident'>Read</span><span class='op'>&gt;</span>(<span class='ident'>source</span>: <span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>io</span>::<span class='ident'>Bytes</span><span class='op'>&lt;</span><span class='ident'>R</span><span class='op'>&gt;</span>) <span class='op'>-&gt;</span> <span class='ident'>Vec</span><span class='op'>&lt;</span><span class='ident'>u8</span><span class='op'>&gt;</span> {
-    <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>iterator</span> <span class='op'>=</span> <span class='ident'>source</span>.<span class='ident'>map</span>(<span class='op'>|</span><span class='ident'>x</span><span class='op'>|</span> <span class='ident'>x</span>.<span class='ident'>unwrap</span>());
+    <span class='comment'>//let mut iterator = source.map(|x| x.unwrap());</span>
 
-    <span class='kw'>let</span> <span class='ident'>ret</span>: <span class='ident'>Vec</span><span class='op'>&lt;</span><span class='ident'>u8</span><span class='op'>&gt;</span> <span class='op'>=</span> <span class='ident'>iterator</span>.<span class='ident'>by_ref</span>().<span class='ident'>take_while</span>(<span class='op'>|</span><span class='ident'>x</span><span class='op'>|</span> <span class='op'>*</span><span class='ident'>x</span> <span class='op'>!=</span> <span class='string'>b&#39;\n&#39;</span>).<span class='ident'>collect</span>();
-    <span class='comment'>//assert_eq!(b&#39;\n&#39;, iterator.next().unwrap()); // get rid of the separating \n</span>
+    <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>ret</span>: <span class='ident'>Vec</span><span class='op'>&lt;</span><span class='ident'>u8</span><span class='op'>&gt;</span> <span class='op'>=</span> <span class='ident'>Vec</span>::<span class='ident'>new</span>();
+    <span class='kw'>for</span> <span class='ident'>result</span> <span class='kw'>in</span> <span class='ident'>source</span> {
+        <span class='kw'>let</span> <span class='ident'>byte</span> <span class='op'>=</span> <span class='kw'>match</span> <span class='ident'>result</span> {
+            <span class='prelude-val'>Ok</span>(<span class='ident'>b</span>) <span class='op'>=&gt;</span> <span class='ident'>b</span>,
+            <span class='prelude-val'>Err</span>(_) <span class='op'>=&gt;</span> { <span class='kw'>let</span> <span class='ident'>ret_clone</span> <span class='op'>=</span> <span class='ident'>ret</span>.<span class='ident'>clone</span>(); <span class='macro'>panic</span><span class='macro'>!</span>(<span class='string'>&quot;Error unwrapping in read_up_to_newline. Input up to now was {:?} =&gt; {:?}&quot;</span>, <span class='ident'>ret_clone</span>, <span class='ident'>String</span>::<span class='ident'>from_utf8</span>(<span class='ident'>ret</span>)) },
+        };
 
-    <span class='ident'>ret</span>
+        <span class='kw'>if</span> <span class='ident'>byte</span> <span class='op'>==</span> <span class='string'>b&#39;\n&#39;</span> {
+            <span class='kw'>return</span> <span class='ident'>ret</span>;
+        }
+        
+        <span class='ident'>ret</span>.<span class='ident'>push</span>(<span class='ident'>byte</span>);
+    }
+
+    <span class='comment'>//let ret: Vec&lt;u8&gt; = iterator.by_ref().take_while(|x| *x != b&#39;\n&#39;).collect();</span>
+
+    <span class='macro'>panic</span><span class='macro'>!</span>(<span class='string'>&quot;left read_up_to_newline loop without finding a newline. ret = {:?}. If you are running the automated test then the client is probably not keeping up with this thread. Increase the thread sleep. Rust lies about the infinite read timeout.&quot;</span>, <span class='ident'>ret</span>);
 }
 
 <span class='comment'>// separate function so I can test it more easily</span>
@@ -707,41 +772,53 @@
 <span class='comment'>// separate function so that I can test it more easily</span>
 <span class='kw'>fn</span> <span class='ident'>customer_read_consumption</span><span class='op'>&lt;</span><span class='ident'>R</span>: <span class='ident'>Read</span><span class='op'>&gt;</span>(<span class='ident'>channel</span>: <span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>R</span>, <span class='ident'>meter_key</span>: <span class='kw-2'>&amp;</span><span class='ident'>sign</span>::<span class='ident'>PublicKey</span>, <span class='ident'>table</span>: <span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>Vec</span><span class='op'>&lt;</span><span class='ident'>ConsumptionTableRow</span><span class='op'>&gt;</span>) {
     <span class='comment'>// read the two newline separated stringified signatures</span>
-    <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>iterator</span> <span class='op'>=</span> <span class='ident'>channel</span>.<span class='ident'>bytes</span>();
+    <span class='kw'>let</span> <span class='ident'>buf</span> <span class='op'>=</span> <span class='ident'>BufReader</span>::<span class='ident'>new</span>(<span class='ident'>channel</span>);
+    <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>lines</span> <span class='op'>=</span> <span class='ident'>buf</span>.<span class='ident'>lines</span>();
 
-    <span class='comment'>// read touple str</span>
-    <span class='kw'>let</span> <span class='ident'>touple_str</span> <span class='op'>=</span> <span class='ident'>String</span>::<span class='ident'>from_utf8</span>(<span class='ident'>read_up_to_newline</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>iterator</span>)).<span class='ident'>unwrap</span>();
-
-    <span class='comment'>// read the signed commitment</span>
-    <span class='kw'>let</span> <span class='ident'>signed_commitment_str_bytes</span> <span class='op'>=</span> <span class='ident'>read_up_to_newline</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>iterator</span>);
-    <span class='kw'>let</span> <span class='ident'>signed_commitment_other</span> <span class='op'>=</span> <span class='ident'>unstringify_bytes</span>(<span class='kw-2'>&amp;</span><span class='ident'>String</span>::<span class='ident'>from_utf8</span>(<span class='ident'>signed_commitment_str_bytes</span>.<span class='ident'>clone</span>()).<span class='ident'>unwrap</span>());
-
-    <span class='comment'>// verify the signature on the commitment</span>
-    <span class='kw'>let</span> <span class='ident'>commitment_other_bytes</span> <span class='op'>=</span> <span class='ident'>sign</span>::<span class='ident'>verify</span>(<span class='kw-2'>&amp;</span><span class='ident'>signed_commitment_other</span>, <span class='ident'>meter_key</span>).<span class='ident'>unwrap</span>();
-    <span class='kw'>let</span> <span class='ident'>commit_other_str</span> <span class='op'>=</span> <span class='ident'>String</span>::<span class='ident'>from_utf8</span>(<span class='ident'>commitment_other_bytes</span>).<span class='ident'>unwrap</span>();
-    <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>commit_other_iter</span> <span class='op'>=</span> <span class='ident'>commit_other_str</span>.<span class='ident'>split_whitespace</span>();
-    <span class='kw'>let</span> _ <span class='op'>=</span> <span class='ident'>commit_other_iter</span>.<span class='ident'>next</span>().<span class='ident'>unwrap</span>();
-    <span class='kw'>let</span> <span class='ident'>other_str</span> <span class='op'>=</span> <span class='ident'>commit_other_iter</span>.<span class='ident'>next</span>().<span class='ident'>unwrap</span>();
-    <span class='macro'>assert_eq</span><span class='macro'>!</span>(<span class='prelude-val'>None</span>, <span class='ident'>commit_other_iter</span>.<span class='ident'>next</span>());
-
-    <span class='comment'>// touple looks like &quot;cons a&quot;</span>
-    <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>touple_iter</span> <span class='op'>=</span> <span class='ident'>touple_str</span>.<span class='ident'>split_whitespace</span>();
-    <span class='kw'>let</span> <span class='ident'>cons_str</span> <span class='op'>=</span> <span class='ident'>touple_iter</span>.<span class='ident'>next</span>().<span class='ident'>unwrap</span>();
-    <span class='kw'>let</span> <span class='ident'>a_str</span> <span class='op'>=</span> <span class='ident'>touple_iter</span>.<span class='ident'>next</span>().<span class='ident'>unwrap</span>();
-    <span class='macro'>assert_eq</span><span class='macro'>!</span>(<span class='prelude-val'>None</span>, <span class='ident'>touple_iter</span>.<span class='ident'>next</span>());
-
-    <span class='kw'>let</span> <span class='ident'>cons</span> <span class='op'>=</span> <span class='ident'>i32</span>::<span class='ident'>from_str_radix</span>(<span class='kw-2'>&amp;</span><span class='ident'>cons_str</span>, <span class='number'>10</span>).<span class='ident'>unwrap</span>();
-    <span class='kw'>let</span> <span class='ident'>other</span> <span class='op'>=</span> <span class='ident'>u8</span>::<span class='ident'>from_str_radix</span>(<span class='kw-2'>&amp;</span><span class='ident'>other_str</span>, <span class='number'>10</span>).<span class='ident'>unwrap</span>();
-    <span class='kw'>let</span> <span class='ident'>a</span> <span class='op'>=</span> <span class='ident'>Mpz</span>::<span class='ident'>from_str_radix</span>(<span class='kw-2'>&amp;</span><span class='ident'>a_str</span>, <span class='number'>16</span>).<span class='ident'>unwrap</span>();
-
-    <span class='kw'>let</span> <span class='ident'>table_row</span> <span class='op'>=</span> <span class='ident'>ConsumptionTableRow</span> {
-        <span class='ident'>signed_commitment</span>: <span class='ident'>String</span>::<span class='ident'>from_utf8</span>(<span class='ident'>signed_commitment_str_bytes</span>).<span class='ident'>unwrap</span>(),
-        <span class='ident'>cons</span>: <span class='ident'>cons</span>,
-        <span class='ident'>other</span>: <span class='ident'>other</span>,
-        <span class='ident'>a</span>: <span class='ident'>a</span>,
-    };
+    <span class='kw'>loop</span> {
+        <span class='comment'>// read touple str</span>
+        <span class='kw'>let</span> <span class='ident'>touple_str</span> <span class='op'>=</span> <span class='kw'>match</span> <span class='ident'>lines</span>.<span class='ident'>next</span>() {
+            <span class='prelude-val'>Some</span>(<span class='ident'>opt</span>) <span class='op'>=&gt;</span> {
+                <span class='kw'>match</span> <span class='ident'>opt</span> {
+                    <span class='prelude-val'>Ok</span>(<span class='ident'>s</span>) <span class='op'>=&gt;</span> <span class='ident'>s</span>,
+                    <span class='prelude-val'>Err</span>(_) <span class='op'>=&gt;</span> <span class='kw'>return</span>, <span class='comment'>// some readers give an empty string instead of a None when there is nothing to read</span>
+                }
+            },
+            <span class='prelude-val'>None</span> <span class='op'>=&gt;</span> <span class='kw'>return</span>,
+        };
         
-    <span class='ident'>table</span>.<span class='ident'>push</span>(<span class='ident'>table_row</span>);
+        <span class='comment'>// read the signed commitment</span>
+        <span class='kw'>let</span> <span class='ident'>signed_commitment_str</span> <span class='op'>=</span> <span class='ident'>lines</span>.<span class='ident'>next</span>().<span class='ident'>unwrap</span>().<span class='ident'>unwrap</span>();
+        <span class='kw'>let</span> <span class='ident'>signed_commitment_other</span> <span class='op'>=</span> <span class='ident'>unstringify_bytes</span>(<span class='kw-2'>&amp;</span><span class='ident'>signed_commitment_str</span>);
+    
+        <span class='comment'>// verify the signature on the commitment</span>
+        <span class='kw'>let</span> <span class='ident'>commitment_other_bytes</span> <span class='op'>=</span> <span class='ident'>sign</span>::<span class='ident'>verify</span>(<span class='kw-2'>&amp;</span><span class='ident'>signed_commitment_other</span>, <span class='ident'>meter_key</span>).<span class='ident'>unwrap</span>();
+        <span class='kw'>let</span> <span class='ident'>commit_other_str</span> <span class='op'>=</span> <span class='ident'>String</span>::<span class='ident'>from_utf8</span>(<span class='ident'>commitment_other_bytes</span>).<span class='ident'>unwrap</span>();
+        <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>commit_other_iter</span> <span class='op'>=</span> <span class='ident'>commit_other_str</span>.<span class='ident'>split_whitespace</span>();
+        <span class='kw'>let</span> _ <span class='op'>=</span> <span class='ident'>commit_other_iter</span>.<span class='ident'>next</span>().<span class='ident'>unwrap</span>();
+        <span class='kw'>let</span> <span class='ident'>other_str</span> <span class='op'>=</span> <span class='ident'>commit_other_iter</span>.<span class='ident'>next</span>().<span class='ident'>unwrap</span>();
+        <span class='macro'>assert_eq</span><span class='macro'>!</span>(<span class='prelude-val'>None</span>, <span class='ident'>commit_other_iter</span>.<span class='ident'>next</span>());
+    
+        <span class='comment'>// touple looks like &quot;cons a&quot;</span>
+        <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>touple_iter</span> <span class='op'>=</span> <span class='ident'>touple_str</span>.<span class='ident'>split_whitespace</span>();
+        <span class='kw'>let</span> <span class='ident'>cons_str</span> <span class='op'>=</span> <span class='ident'>touple_iter</span>.<span class='ident'>next</span>().<span class='ident'>unwrap</span>();
+        <span class='kw'>let</span> <span class='ident'>a_str</span> <span class='op'>=</span> <span class='ident'>touple_iter</span>.<span class='ident'>next</span>().<span class='ident'>unwrap</span>();
+        <span class='macro'>assert_eq</span><span class='macro'>!</span>(<span class='prelude-val'>None</span>, <span class='ident'>touple_iter</span>.<span class='ident'>next</span>());
+    
+        <span class='kw'>let</span> <span class='ident'>cons</span> <span class='op'>=</span> <span class='ident'>i32</span>::<span class='ident'>from_str_radix</span>(<span class='kw-2'>&amp;</span><span class='ident'>cons_str</span>, <span class='number'>10</span>).<span class='ident'>unwrap</span>();
+        <span class='kw'>let</span> <span class='ident'>other</span> <span class='op'>=</span> <span class='ident'>u64</span>::<span class='ident'>from_str_radix</span>(<span class='kw-2'>&amp;</span><span class='ident'>other_str</span>, <span class='number'>10</span>).<span class='ident'>unwrap</span>();
+        <span class='kw'>let</span> <span class='ident'>a</span> <span class='op'>=</span> <span class='ident'>Mpz</span>::<span class='ident'>from_str_radix</span>(<span class='kw-2'>&amp;</span><span class='ident'>a_str</span>, <span class='number'>16</span>).<span class='ident'>unwrap</span>();
+    
+        <span class='kw'>let</span> <span class='ident'>table_row</span> <span class='op'>=</span> <span class='ident'>ConsumptionTableRow</span> {
+            <span class='comment'>//signed_commitment: String::from_utf8(signed_commitment_str_bytes).unwrap(),</span>
+            <span class='ident'>signed_commitment</span>: <span class='ident'>signed_commitment_str</span>,
+            <span class='ident'>cons</span>: <span class='ident'>cons</span>,
+            <span class='ident'>other</span>: <span class='ident'>other</span>,
+            <span class='ident'>a</span>: <span class='ident'>a</span>,
+        };
+            
+        <span class='ident'>table</span>.<span class='ident'>push</span>(<span class='ident'>table_row</span>);
+    }
 }
     
 <span class='kw'>impl</span><span class='op'>&lt;</span><span class='ident'>T</span>: <span class='ident'>Read</span> <span class='op'>+</span> <span class='ident'>Write</span><span class='op'>&gt;</span> <span class='ident'>MeterState</span><span class='op'>&lt;</span><span class='ident'>T</span><span class='op'>&gt;</span> {
@@ -764,7 +841,7 @@
 <span class='kw'>struct</span> <span class='ident'>ConsumptionTableRow</span> {
     <span class='ident'>signed_commitment</span>: <span class='ident'>String</span>,
     <span class='ident'>cons</span>: <span class='ident'>i32</span>,
-    <span class='ident'>other</span>: <span class='ident'>u8</span>,
+    <span class='ident'>other</span>: <span class='ident'>u64</span>,
     <span class='ident'>a</span>: <span class='ident'>Mpz</span>,
 }
 
@@ -803,15 +880,32 @@
         }
     }
 
-    <span class='doccomment'>/// Calculate the bill and send it to the provider</span>
-    <span class='kw'>pub</span> <span class='kw'>fn</span> <span class='ident'>send_billing_information</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='self'>self</span>) {
+    <span class='doccomment'>/// For debugging and logging: outputs a human readable representation of the cons and other fields of the consumption table</span>
+    <span class='kw'>pub</span> <span class='kw'>fn</span> <span class='ident'>readable_consumption_table</span>(<span class='kw-2'>&amp;</span><span class='self'>self</span>) <span class='op'>-&gt;</span> <span class='ident'>String</span> {
+        <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>out</span> <span class='op'>=</span> <span class='ident'>String</span>::<span class='ident'>new</span>();
+        <span class='kw'>for</span> <span class='ident'>row</span> <span class='kw'>in</span> <span class='kw-2'>&amp;</span><span class='self'>self</span>.<span class='ident'>consumption_table</span> {
+            <span class='kw'>let</span> <span class='ident'>row</span> <span class='op'>=</span> <span class='macro'>format</span><span class='macro'>!</span>(<span class='string'>&quot;cons: {}, other: {}\n&quot;</span>, <span class='ident'>row</span>.<span class='ident'>cons</span>, <span class='ident'>row</span>.<span class='ident'>other</span>);
+            <span class='ident'>out</span> <span class='op'>=</span> <span class='ident'>out</span> <span class='op'>+</span> <span class='ident'>row</span>.<span class='ident'>as_str</span>();
+        }
+        <span class='ident'>out</span>
+    }
+
+    <span class='doccomment'>/// Calculate the bill and send it to the provider and return the bill</span>
+    <span class='kw'>pub</span> <span class='kw'>fn</span> <span class='ident'>send_billing_information</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='self'>self</span>) <span class='op'>-&gt;</span> <span class='ident'>i64</span> {
         <span class='comment'>// calculate what we think that the bill will be and what we expect a to be</span>
         <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>bill</span> <span class='op'>=</span> <span class='number'>0</span> <span class='kw'>as</span> <span class='ident'>i64</span>;
         <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>a</span> <span class='op'>=</span> <span class='ident'>Mpz</span>::<span class='ident'>zero</span>();
 
+        <span class='comment'>// do nothing if there is no bill to send</span>
+        <span class='kw'>if</span> <span class='self'>self</span>.<span class='ident'>consumption_table</span>.<span class='ident'>len</span>() <span class='op'>==</span> <span class='number'>0</span> {
+            <span class='macro'>println</span><span class='macro'>!</span>(<span class='string'>&quot;I can&#39;t bill an empty consumption table!&quot;</span>);
+            <span class='kw'>return</span> <span class='number'>0</span>;
+        }
+
         <span class='kw'>for</span> <span class='ident'>row</span> <span class='kw'>in</span> <span class='kw-2'>&amp;</span><span class='self'>self</span>.<span class='ident'>consumption_table</span> {
-            <span class='ident'>bill</span> <span class='op'>+=</span> <span class='ident'>row</span>.<span class='ident'>cons</span> <span class='kw'>as</span> <span class='ident'>i64</span> <span class='op'>*</span> <span class='self'>self</span>.<span class='ident'>prices</span>[<span class='ident'>row</span>.<span class='ident'>other</span> <span class='kw'>as</span> <span class='ident'>usize</span>] <span class='kw'>as</span> <span class='ident'>i64</span>;
-            <span class='ident'>a</span> <span class='op'>=</span> (<span class='ident'>a</span> <span class='op'>+</span> <span class='ident'>row</span>.<span class='ident'>a</span>.<span class='ident'>clone</span>() <span class='op'>*</span> <span class='self'>self</span>.<span class='ident'>prices</span>[<span class='ident'>row</span>.<span class='ident'>other</span> <span class='kw'>as</span> <span class='ident'>usize</span>] <span class='kw'>as</span> <span class='ident'>i64</span>).<span class='ident'>modulus</span>(<span class='kw-2'>&amp;</span><span class='self'>self</span>.<span class='ident'>params</span>.<span class='number'>0</span>);
+            <span class='kw'>let</span> <span class='ident'>price</span> <span class='op'>=</span> <span class='self'>self</span>.<span class='ident'>prices</span>[(<span class='ident'>row</span>.<span class='ident'>other</span> <span class='op'>%</span> (<span class='number'>24</span><span class='op'>*</span><span class='number'>7</span>)) <span class='kw'>as</span> <span class='ident'>usize</span>] <span class='kw'>as</span> <span class='ident'>i64</span>;
+            <span class='ident'>bill</span> <span class='op'>+=</span> <span class='ident'>row</span>.<span class='ident'>cons</span> <span class='kw'>as</span> <span class='ident'>i64</span> <span class='op'>*</span> <span class='ident'>price</span>;
+            <span class='ident'>a</span> <span class='op'>=</span> (<span class='ident'>a</span> <span class='op'>+</span> <span class='ident'>row</span>.<span class='ident'>a</span>.<span class='ident'>clone</span>() <span class='op'>*</span> <span class='ident'>price</span>).<span class='ident'>modulus</span>(<span class='kw-2'>&amp;</span><span class='self'>self</span>.<span class='ident'>params</span>.<span class='number'>0</span>);
         }
 
         <span class='comment'>// Message format: &quot;bill\na\ntable.len()\ntable[0]\n...\n\table[N]\n&quot;</span>
@@ -833,8 +927,13 @@
             };
         }
 
+        <span class='comment'>//println!(&quot;consumption table = {}&quot;, self.readable_consumption_table());</span>
+        <span class='comment'>//println!(&quot;prices = {:?}&quot;, self.prices.as_ref());</span>
+        <span class='comment'>//println!(&quot;bill = {}&quot;, bill);</span>
+
         <span class='comment'>// empty the table</span>
         <span class='self'>self</span>.<span class='ident'>consumption_table</span>.<span class='ident'>clear</span>();
+        <span class='ident'>bill</span>
     }
     
     <span class='doccomment'>/// check for new consumption messages from the meter</span>
@@ -845,7 +944,7 @@
     <span class='doccomment'>/// check for price changes from the provider</span>
     <span class='kw'>pub</span> <span class='kw'>fn</span> <span class='ident'>read_provider_messages</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='self'>self</span>) {
         <span class='comment'>// check for new prices information</span>
-        <span class='kw'>if</span> <span class='kw'>let</span> <span class='prelude-val'>Some</span>(<span class='ident'>new_prices</span>) <span class='op'>=</span> <span class='ident'>common</span>::<span class='ident'>check_for_new_prices</span>::<span class='op'>&lt;</span><span class='ident'>P</span>, <span class='ident'>i32</span>, <span class='ident'>IntegerConsumption</span><span class='op'>&gt;</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='self'>self</span>.<span class='ident'>provider_channel</span>, <span class='kw-2'>&amp;</span><span class='self'>self</span>.<span class='ident'>provider_key</span>) {
+        <span class='kw'>if</span> <span class='kw'>let</span> <span class='prelude-val'>Some</span>(<span class='ident'>new_prices</span>) <span class='op'>=</span> <span class='ident'>common</span>::<span class='ident'>check_for_new_prices</span>::<span class='op'>&lt;</span><span class='ident'>P</span>, <span class='ident'>i32</span>, <span class='ident'>u64</span>, <span class='ident'>IntegerConsumption</span><span class='op'>&gt;</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='self'>self</span>.<span class='ident'>provider_channel</span>, <span class='kw-2'>&amp;</span><span class='self'>self</span>.<span class='ident'>provider_key</span>) {
             <span class='self'>self</span>.<span class='ident'>prices</span> <span class='op'>=</span> <span class='ident'>new_prices</span>;
         }
     }
@@ -856,7 +955,7 @@
     <span class='doccomment'>/// Channel through which to communicate to the customer</span>
     <span class='ident'>channel</span>: <span class='ident'>T</span>,
     <span class='doccomment'>/// The prices currently used to calculate the bill</span>
-    <span class='ident'>prices</span>: <span class='ident'>Prices</span>,
+    <span class='kw'>pub</span> <span class='ident'>prices</span>: <span class='ident'>Prices</span>,
     <span class='doccomment'>/// Signing keys</span>
     <span class='ident'>keys</span>: <span class='kw'>super</span>::<span class='ident'>Keys</span>,
     <span class='doccomment'>/// Commitment parameters</span>
@@ -887,12 +986,17 @@
 
     <span class='doccomment'>/// receive new billing information</span>
     <span class='kw'>pub</span> <span class='kw'>fn</span> <span class='ident'>receive_billing_information</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='self'>self</span>) {
-        <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>iterator</span> <span class='op'>=</span> <span class='ident'>Read</span>::<span class='ident'>by_ref</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='self'>self</span>.<span class='ident'>channel</span>).<span class='ident'>bytes</span>();
+        <span class='kw'>let</span> <span class='ident'>buf</span> <span class='op'>=</span> <span class='ident'>BufReader</span>::<span class='ident'>new</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='self'>self</span>.<span class='ident'>channel</span>);
+        <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>iterator</span> <span class='op'>=</span> <span class='ident'>buf</span>.<span class='ident'>bytes</span>();
 
         <span class='comment'>// get the fixed-length part</span>
+        <span class='comment'>//println!(&quot;reading bill&quot;);</span>
         <span class='kw'>let</span> <span class='ident'>bill_bytes</span> <span class='op'>=</span> <span class='ident'>read_up_to_newline</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>iterator</span>);
+        <span class='comment'>//println!(&quot;bill_bytes is {:?}&quot;, bill_bytes);</span>
         <span class='kw'>let</span> <span class='ident'>a_bytes</span> <span class='op'>=</span> <span class='ident'>read_up_to_newline</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>iterator</span>);
+        <span class='comment'>//println!(&quot;a bytes is {:?}&quot;, a_bytes);</span>
         <span class='kw'>let</span> <span class='ident'>length_bytes</span> <span class='op'>=</span> <span class='ident'>read_up_to_newline</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>iterator</span>);
+        <span class='comment'>//println!(&quot;length_bytes is {:?}&quot;, String::from_utf8(length_bytes.clone()));</span>
 
         <span class='kw'>let</span> <span class='ident'>bill</span> <span class='op'>=</span> <span class='ident'>i64</span>::<span class='ident'>from_str_radix</span>(<span class='kw-2'>&amp;</span><span class='ident'>String</span>::<span class='ident'>from_utf8</span>(<span class='ident'>bill_bytes</span>).<span class='ident'>unwrap</span>(), <span class='number'>10</span>).<span class='ident'>unwrap</span>();
         <span class='kw'>let</span> <span class='ident'>a</span> <span class='op'>=</span> <span class='ident'>Mpz</span>::<span class='ident'>from_str_radix</span>(<span class='kw-2'>&amp;</span><span class='ident'>String</span>::<span class='ident'>from_utf8</span>(<span class='ident'>a_bytes</span>).<span class='ident'>unwrap</span>(), <span class='number'>16</span>).<span class='ident'>unwrap</span>();
@@ -921,7 +1025,7 @@
             <span class='kw'>let</span> <span class='ident'>commitment</span> <span class='op'>=</span> <span class='ident'>Mpz</span>::<span class='ident'>from_str_radix</span>(<span class='kw-2'>&amp;</span><span class='ident'>commit_str</span>, <span class='number'>16</span>).<span class='ident'>unwrap</span>();
             <span class='ident'>commitments</span>.<span class='ident'>push</span>(<span class='ident'>commitments</span>::<span class='ident'>Commitment</span>::<span class='ident'>from_parts</span>(<span class='ident'>commitment</span>, <span class='self'>self</span>.<span class='ident'>params</span>.<span class='number'>0</span>.<span class='ident'>clone</span>(), <span class='bool-val'>false</span>).<span class='ident'>unwrap</span>());
 
-            <span class='kw'>let</span> <span class='ident'>other</span> <span class='op'>=</span> <span class='ident'>usize</span>::<span class='ident'>from_str_radix</span>(<span class='kw-2'>&amp;</span><span class='ident'>other_str</span>, <span class='number'>10</span>).<span class='ident'>unwrap</span>();
+            <span class='kw'>let</span> <span class='ident'>other</span> <span class='op'>=</span> <span class='ident'>u64</span>::<span class='ident'>from_str_radix</span>(<span class='kw-2'>&amp;</span><span class='ident'>other_str</span>, <span class='number'>10</span>).<span class='ident'>unwrap</span>();
             <span class='ident'>others</span>.<span class='ident'>push</span>(<span class='ident'>other</span>);
         }
 
@@ -929,9 +1033,9 @@
         <span class='kw'>let</span> <span class='ident'>expected_commit</span> <span class='op'>=</span> <span class='ident'>commitments</span>::<span class='ident'>CommitmentContext</span>::<span class='ident'>from_opening</span>(
             (<span class='ident'>Mpz</span>::<span class='ident'>from</span>(<span class='ident'>bill</span>), <span class='ident'>a</span>), <span class='self'>self</span>.<span class='ident'>params</span>.<span class='ident'>clone</span>()).<span class='ident'>unwrap</span>().<span class='ident'>to_commitment</span>();
 
-        <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>calculated_commit</span> <span class='op'>=</span> <span class='ident'>commitments</span>[<span class='number'>0</span>].<span class='ident'>clone</span>() <span class='op'>*</span> <span class='ident'>Mpz</span>::<span class='ident'>from</span>(<span class='self'>self</span>.<span class='ident'>prices</span>[<span class='ident'>others</span>[<span class='number'>0</span>]]);
+        <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>calculated_commit</span> <span class='op'>=</span> <span class='ident'>commitments</span>[<span class='number'>0</span>].<span class='ident'>clone</span>() <span class='op'>*</span> <span class='ident'>Mpz</span>::<span class='ident'>from</span>(<span class='self'>self</span>.<span class='ident'>prices</span>[(<span class='ident'>others</span>[<span class='number'>0</span>] <span class='op'>%</span> (<span class='number'>24</span><span class='op'>*</span><span class='number'>7</span>)) <span class='kw'>as</span> <span class='ident'>usize</span>]);
         <span class='kw'>for</span> <span class='ident'>i</span> <span class='kw'>in</span> <span class='number'>1</span>..<span class='ident'>length</span> {
-            <span class='ident'>calculated_commit</span> <span class='op'>=</span> <span class='ident'>calculated_commit</span> <span class='op'>+</span> (<span class='ident'>commitments</span>[<span class='ident'>i</span>].<span class='ident'>clone</span>() <span class='op'>*</span> <span class='ident'>Mpz</span>::<span class='ident'>from</span>(<span class='self'>self</span>.<span class='ident'>prices</span>[<span class='ident'>others</span>[<span class='ident'>i</span>]]));
+            <span class='ident'>calculated_commit</span> <span class='op'>=</span> <span class='ident'>calculated_commit</span> <span class='op'>+</span> (<span class='ident'>commitments</span>[<span class='ident'>i</span>].<span class='ident'>clone</span>() <span class='op'>*</span> <span class='ident'>Mpz</span>::<span class='ident'>from</span>(<span class='self'>self</span>.<span class='ident'>prices</span>[(<span class='ident'>others</span>[<span class='ident'>i</span>] <span class='op'>%</span> (<span class='number'>24</span><span class='op'>*</span><span class='number'>7</span>)) <span class='kw'>as</span> <span class='ident'>usize</span>]));
         }
 
         <span class='macro'>assert</span><span class='macro'>!</span>(<span class='ident'>expected_commit</span> <span class='op'>==</span> <span class='ident'>calculated_commit</span>);
@@ -943,7 +1047,7 @@
     <span class='doccomment'>/// Store and send the new prices to the customer. Does not check if the prices have actually changed before sending.</span>
     <span class='kw'>pub</span> <span class='kw'>fn</span> <span class='ident'>change_prices</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='self'>self</span>, <span class='ident'>prices</span>: <span class='kw-2'>&amp;</span><span class='ident'>Prices</span>) {
         <span class='comment'>// send them</span>
-        <span class='ident'>common</span>::<span class='ident'>change_prices</span>::<span class='op'>&lt;</span><span class='ident'>T</span>, <span class='ident'>i32</span>, <span class='ident'>IntegerConsumption</span><span class='op'>&gt;</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='self'>self</span>.<span class='ident'>channel</span>, <span class='kw-2'>&amp;</span><span class='self'>self</span>.<span class='ident'>keys</span>.<span class='ident'>my_sk</span>, <span class='ident'>prices</span>);
+        <span class='ident'>common</span>::<span class='ident'>change_prices</span>::<span class='op'>&lt;</span><span class='ident'>T</span>, <span class='ident'>i32</span>, <span class='ident'>u64</span>, <span class='ident'>IntegerConsumption</span><span class='op'>&gt;</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='self'>self</span>.<span class='ident'>channel</span>, <span class='kw-2'>&amp;</span><span class='self'>self</span>.<span class='ident'>keys</span>.<span class='ident'>my_sk</span>, <span class='ident'>prices</span>);
 
         <span class='comment'>// store the prices </span>
         <span class='self'>self</span>.<span class='ident'>prices</span> <span class='op'>=</span> <span class='op'>*</span><span class='ident'>prices</span>;
@@ -978,8 +1082,7 @@
 
         <span class='comment'>// random consumption to send</span>
         <span class='kw'>let</span> <span class='ident'>units</span> <span class='op'>=</span> <span class='kw'>super</span>::<span class='kw'>super</span>::<span class='ident'>tests</span>::<span class='ident'>random_positive_i32</span>();
-        <span class='comment'>//println!(&quot;Testing cons is {}&quot;, units);</span>
-        <span class='kw'>let</span> <span class='ident'>hour</span> <span class='op'>=</span> <span class='ident'>random_hour_of_week</span>();
+        <span class='kw'>let</span> <span class='ident'>hour</span> <span class='op'>=</span> <span class='ident'>random_hour_of_week</span>() <span class='kw'>as</span> <span class='ident'>u64</span>;
         <span class='kw'>let</span> <span class='ident'>consumption</span> <span class='op'>=</span> <span class='ident'>IntegerConsumption</span>::<span class='ident'>new</span>(<span class='ident'>units</span>, <span class='ident'>hour</span>);
 
         <span class='comment'>// channel along which to send data</span>
@@ -1022,33 +1125,29 @@
         }
     
         <span class='kw'>fn</span> <span class='ident'>consume</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='self'>self</span>, <span class='ident'>consumption</span>: <span class='kw-2'>&amp;</span><span class='self'>Self</span>::<span class='ident'>Consumption</span>) {
-            <span class='comment'>//println!(&quot;begin consume&quot;);</span>
             <span class='comment'>// assert we are a Client</span>
             <span class='kw'>let</span> (<span class='kw-2'>ref</span> <span class='kw-2'>mut</span> <span class='ident'>meter</span>, <span class='kw-2'>ref</span> <span class='kw-2'>mut</span> <span class='ident'>customer</span>) <span class='op'>=</span> <span class='kw'>match</span> <span class='self'>self</span>.<span class='ident'>role</span> {
                 <span class='ident'>Role</span>::<span class='ident'>Client</span>(<span class='kw-2'>ref</span> <span class='kw-2'>mut</span> <span class='ident'>m</span>, <span class='kw-2'>ref</span> <span class='kw-2'>mut</span> <span class='ident'>c</span>) <span class='op'>=&gt;</span> (<span class='ident'>m</span>, <span class='ident'>c</span>),
                 _ <span class='op'>=&gt;</span> <span class='macro'>panic</span><span class='macro'>!</span>(<span class='string'>&quot;This function should be called on the Client&quot;</span>),
             };
     
-            <span class='ident'>customer</span>.<span class='ident'>read_provider_messages</span>();
+            <span class='comment'>//customer.read_provider_messages();</span>
             <span class='ident'>meter</span>.<span class='ident'>consume</span>(<span class='ident'>consumption</span>);
             <span class='ident'>customer</span>.<span class='ident'>read_meter_messages</span>();
-            <span class='comment'>//println!(&quot;end consume&quot;);</span>
         }
     
         <span class='kw'>fn</span> <span class='ident'>send_billing_information</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='self'>self</span>) {
-            <span class='comment'>//println!(&quot;begin send_billing_info&quot;);</span>
             <span class='comment'>// assert we are a Client</span>
             <span class='kw'>let</span> <span class='kw-2'>ref</span> <span class='kw-2'>mut</span> <span class='ident'>customer</span> <span class='op'>=</span> <span class='kw'>match</span> <span class='self'>self</span>.<span class='ident'>role</span> {
                 <span class='ident'>Role</span>::<span class='ident'>Client</span>(_, <span class='kw-2'>ref</span> <span class='kw-2'>mut</span> <span class='ident'>c</span>) <span class='op'>=&gt;</span> <span class='ident'>c</span>,
                 _ <span class='op'>=&gt;</span> <span class='macro'>panic</span><span class='macro'>!</span>(<span class='string'>&quot;This function should be called on the Client&quot;</span>),
             };
     
+            <span class='ident'>customer</span>.<span class='ident'>read_provider_messages</span>();
             <span class='ident'>customer</span>.<span class='ident'>send_billing_information</span>();
-            <span class='comment'>//println!(&quot;end send billing info&quot;);</span>
         }
     
         <span class='kw'>fn</span> <span class='ident'>pay_bill</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='self'>self</span>) <span class='op'>-&gt;</span> <span class='ident'>i64</span> {
-            <span class='comment'>//println!(&quot;begin pay_bill&quot;);</span>
             <span class='comment'>// assert we are a Server</span>
             <span class='kw'>let</span> <span class='kw-2'>ref</span> <span class='kw-2'>mut</span> <span class='ident'>provider</span> <span class='op'>=</span> <span class='kw'>match</span> <span class='self'>self</span>.<span class='ident'>role</span> {
                 <span class='ident'>Role</span>::<span class='ident'>Server</span>(<span class='kw-2'>ref</span> <span class='kw-2'>mut</span> <span class='ident'>s</span>) <span class='op'>=&gt;</span> <span class='ident'>s</span>,
@@ -1056,13 +1155,11 @@
             };
     
             <span class='ident'>provider</span>.<span class='ident'>receive_billing_information</span>();
-            <span class='comment'>//println!(&quot;end pay bill&quot;);</span>
             <span class='ident'>provider</span>.<span class='ident'>pay_bill</span>()
         }
     
     
         <span class='kw'>fn</span> <span class='ident'>change_prices</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='self'>self</span>, <span class='ident'>prices</span>: <span class='kw-2'>&amp;</span><span class='ident'>Prices</span>) {
-            <span class='comment'>//println!(&quot;begin change prices&quot;);</span>
             <span class='comment'>// assert we are a Server</span>
             <span class='kw'>let</span> <span class='kw-2'>ref</span> <span class='kw-2'>mut</span> <span class='ident'>provider</span> <span class='op'>=</span> <span class='kw'>match</span> <span class='self'>self</span>.<span class='ident'>role</span> {
                 <span class='ident'>Role</span>::<span class='ident'>Server</span>(<span class='kw-2'>ref</span> <span class='kw-2'>mut</span> <span class='ident'>s</span>) <span class='op'>=&gt;</span> <span class='ident'>s</span>,
@@ -1070,7 +1167,6 @@
             };       
     
             <span class='ident'>provider</span>.<span class='ident'>change_prices</span>(<span class='ident'>prices</span>);
-            <span class='comment'>//println!(&quot;end change prices&quot;);</span>
         }
     
         <span class='kw'>fn</span> <span class='ident'>new_meter</span>(<span class='ident'>provider_channel</span>: <span class='ident'>T</span>, <span class='ident'>prices</span>: <span class='kw-2'>&amp;</span><span class='ident'>Prices</span>, <span class='ident'>keys</span>: <span class='kw'>super</span>::<span class='kw'>super</span>::<span class='ident'>MeterKeys</span>) <span class='op'>-&gt;</span> <span class='ident'>ThreeParty</span><span class='op'>&lt;</span><span class='ident'>T</span><span class='op'>&gt;</span> {
@@ -1104,7 +1200,9 @@
             <span class='kw'>let</span> <span class='ident'>connector</span> <span class='op'>=</span> <span class='ident'>thread</span>::<span class='ident'>spawn</span>(<span class='ident'>connect_thread</span>);
     
             <span class='kw'>let</span> <span class='ident'>stream1</span> <span class='op'>=</span> <span class='ident'>listener</span>.<span class='ident'>accept</span>().<span class='ident'>unwrap</span>().<span class='number'>0</span>;
+            <span class='ident'>stream1</span>.<span class='ident'>set_nonblocking</span>(<span class='bool-val'>true</span>).<span class='ident'>unwrap</span>();
             <span class='kw'>let</span> <span class='ident'>stream2</span> <span class='op'>=</span> <span class='ident'>connector</span>.<span class='ident'>join</span>().<span class='ident'>unwrap</span>();
+            <span class='ident'>stream2</span>.<span class='ident'>set_nonblocking</span>(<span class='bool-val'>true</span>).<span class='ident'>unwrap</span>();
     
             <span class='kw'>let</span> <span class='ident'>params</span> <span class='op'>=</span> <span class='ident'>read_or_gen_params</span>(<span class='ident'>DEFAULT_PARAMS_PATH</span>);
             

@@ -1,5 +1,6 @@
 (function() {var implementors = {};
 implementors["libc"] = [];
+implementors["num"] = [];
 implementors["serde"] = [];
 
             if (window.register_implementors) {
