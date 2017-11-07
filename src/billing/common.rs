@@ -15,10 +15,13 @@ use num::cast::NumCast;
 use proj_crypto::asymmetric::sign;
 use std::io::{Read, Write, ErrorKind};
 use super::consumption::Consumption;
+use std::time::SystemTime;
+use std::vec::Vec;
+use std::mem::{size_of, transmute};
 
 // only works for 4-byte wide Cons (see the transmute)
 pub fn check_for_new_prices<T: Read + Write, Cons: Sized, Other: NumCast, C: Consumption<Cons, Other>>(channel: &mut T, their_pk: &sign::PublicKey) -> Option<C::Prices> {
-    const BUF_LEN: usize = 4 * 7 * 24 + sign::SIGNATUREBYTES; // size_of apparently doesn't do constants
+    const BUF_LEN: usize = 4 * 7 * 24 + sign::SIGNATUREBYTES + size_of::<SystemTime>(); 
     let mut buf: [u8; BUF_LEN] = [0; BUF_LEN];
     let mut ret = None;
 
@@ -31,10 +34,27 @@ pub fn check_for_new_prices<T: Read + Write, Cons: Sized, Other: NumCast, C: Con
             },
         }
 
-        let data_buf = match sign::verify(&buf, their_pk) {
+        let mut time_buf = match sign::verify(&buf, their_pk) {
             Ok(b) => b,
             Err(_) => { panic!("Verification of new pricing strategy failed") },
         };
+
+        // split timestamp and prices
+        let data_buf = time_buf.split_off(size_of::<SystemTime>());
+
+        // check timestamp
+        let mut timestamp_bytes: [u8; size_of::<SystemTime>()] = [0; size_of::<SystemTime>()];
+        for i in 0..size_of::<SystemTime>() {
+            timestamp_bytes[i] = time_buf[i];
+        }
+        let timestamp: SystemTime = unsafe {
+            transmute::<[u8; size_of::<SystemTime>()], SystemTime>(timestamp_bytes)
+        };
+        let time_difference = SystemTime::now().duration_since(timestamp).unwrap();
+        // expect new prices every 2 months
+        if time_difference.as_secs() > (2 * 31 * 24 * 60 * 60) {
+            panic!("Time difference is too large");
+        } // else everything's good
 
         let mut new_prices: C::Prices = C::null_prices();
 
@@ -57,7 +77,24 @@ pub fn check_for_new_prices<T: Read + Write, Cons: Sized, Other: NumCast, C: Con
 }
 
 pub fn change_prices<T: Write, Cons, Other, C: Consumption<Cons, Other>>(channel: &mut T, sk: &sign::SecretKey, prices: &C::Prices) {
-    let buf = C::prices_to_bytes(prices);
+    // get timestamp
+    let now = SystemTime::now();
+    let time_buf = unsafe {
+        transmute::<SystemTime, [u8; size_of::<SystemTime>()]>(now)
+    };
+
+    // get prices
+    let mut price_buf = C::prices_to_bytes(prices);
+
+    // timestamp, prices
+    let mut buf: Vec<u8> = Vec::new();
+    // to get the lengths equal
+    for _ in 0..size_of::<SystemTime>() {
+        buf.push(0);
+    }
+
+    buf.copy_from_slice(&time_buf);
+    buf.append(&mut price_buf);
 
     let sbuf = sign::sign(&buf, sk);
 

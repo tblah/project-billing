@@ -19,3 +19,4 @@ num = "0.1.37"
 [[bin]]
 name = "interactive-demo"
 doc = true
+path = "src/main.rs"

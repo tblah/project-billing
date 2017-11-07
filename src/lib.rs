@@ -24,6 +24,8 @@
 #![warn(non_upper_case_globals)]
 #![warn(non_camel_case_types)]
 #![warn(unused_qualifications)]
+#![feature(const_fn)]
+#![feature(const_size_of)]
 
 extern crate proj_net;
 extern crate proj_crypto;

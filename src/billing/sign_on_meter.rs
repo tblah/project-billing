@@ -141,7 +141,7 @@ impl<T: Read + Write> BillingProtocol<T, f64> for SignOnMeter<T> {
             role: Role::Meter,
             channel: channel,
             running_total: 0.0,
-            prices: *prices.clone(),
+            prices: prices.clone(),
             keys: keys,
         }
     }
