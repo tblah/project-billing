@@ -1,5 +1,5 @@
 # project-billing
-The protocols implemented in this repository are written up in a [paper available here.](http://ia.cr/2017/654)
+The protocols implemented in this repository are written up in a [paper available here.](http://www.mdpi.com/2410-387X/1/3/20)
 
 This project contains some implementations of secure privacy-friendly billing for smart meters. It is build on top of [proj_net](https://github.com/tblah/project-net).
 
